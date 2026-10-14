@@ -1,0 +1,443 @@
+<title>Airside Toolkit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: header with shared settings → tool tabs → each tool: input grid, results, chart, method notes */
+:root {
+  --bg: #f2f4f5; --surface: #ffffff; --ink: #171d21; --muted: #5b6770; --line: #d6dde1; --grid: #e9edf0;
+  --accent: #1d5f8f; --accent-soft: #e4eef6;
+  --a: #b4531a; --b: #6a4c9c;
+  --sheet: #8a96a0; --vel: #b4621a;
+  --c-sat: #26323a; --c-rh: #b7c2c9; --c-wb: #5f93bb; --c-h: #c08a52; --c-v: #6d9a6b;
+  --coil: #0f7b6c;
+  --warn: #9a5b00; --warn-soft: #fff3df; --err: #b42318;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101518; --surface: #192025; --ink: #e5ebef; --muted: #96a3ad; --line: #2c363d; --grid: #222a30;
+    --accent: #6cb2e8; --accent-soft: #16293a; --a: #e8894c; --b: #a98be0; --sheet: #6b7882; --vel: #e8955a;
+    --c-sat: #d5dde2; --c-rh: #46535c; --c-wb: #4f86b3; --c-h: #a8794a; --c-v: #5b8a59;
+    --coil: #4fc4ac; --warn: #f0b45a; --warn-soft: #33270f; --err: #ff8a7a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101518; --surface: #192025; --ink: #e5ebef; --muted: #96a3ad; --line: #2c363d; --grid: #222a30;
+  --accent: #6cb2e8; --accent-soft: #16293a; --a: #e8894c; --b: #a98be0; --sheet: #6b7882; --vel: #e8955a;
+  --c-sat: #d5dde2; --c-rh: #46535c; --c-wb: #4f86b3; --c-h: #a8794a; --c-v: #5b8a59;
+  --coil: #4fc4ac; --warn: #f0b45a; --warn-soft: #33270f; --err: #ff8a7a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-inline: 20px; padding-block: 22px 48px; display: grid; gap: 18px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1.75rem; font-weight: 700; }
+h2 { font-size: 1.1rem; font-weight: 600; }
+.eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; font-weight: 600; color: var(--muted); }
+.topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px 24px; }
+.topbar p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+.global { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
+.field > label, .lbl { font-size: .76rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.unit { font-family: var(--font-num); font-size: .76rem; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+.derived { font-family: var(--font-num); font-size: .82rem; color: var(--muted); padding-bottom: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; max-width: 100%; background: var(--surface); }
+.seg button { font: 500 .9rem var(--font-body); padding: 7px 12px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+button:focus-visible, input:focus-visible, select:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type="number"], input[type="text"], select {
+  font: 500 1rem var(--font-num); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 5px; padding: 7px 9px; width: 100%; min-width: 0; font-variant-numeric: tabular-nums;
+}
+.controls input[type="number"] { background: var(--bg); }
+select { font-family: var(--font-body); font-size: .92rem; }
+input.bad { border-color: var(--err) !important; }
+
+.tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.tabs a { font: 600 1.1rem var(--font-display); padding: 10px 18px 9px; color: var(--muted); text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs a small { display: block; font: 400 .78rem var(--font-body); color: var(--muted); }
+.tabs a[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs a:focus-visible { outline: 2px solid var(--accent); }
+@media (max-width: 640px) { .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .tabs a { white-space: nowrap; padding: 10px 12px 9px; font-size: 1rem; } .tabs a small { display: none; } }
+.panel { display: grid; gap: 18px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; align-content: start; }
+.calc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .calc { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .calc { grid-template-columns: minmax(0, 1fr); } }
+.var { border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-content: start; background: var(--bg); min-width: 0; }
+.var.pinned { background: var(--surface); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: inset 0 3px 0 var(--accent); }
+.var .top { display: flex; flex-wrap: nowrap; justify-content: space-between; align-items: flex-start; gap: 4px 8px; min-height: 22px; }
+.var .top .pin { flex: none; }
+.var .name { font: 600 1.02rem var(--font-display); min-width: 0; }
+.var .name .unit { margin-left: 4px; }
+.var input[type="number"] { font-size: 1.25rem; padding: 7px 10px; }
+.var.info { background: transparent; border-style: dashed; }
+.var.info .big-num { font: 500 1.25rem var(--font-num); padding: 8px 0 7px; color: var(--ink); }
+.var:not(.pinned) input.calcd { color: var(--accent); border-style: dashed; }
+.pin { font: 600 .68rem var(--font-body); text-transform: uppercase; letter-spacing: .06em; border-radius: 99px; padding: 3px 9px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--muted); white-space: nowrap; }
+.var.pinned .pin { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.var.pinned.lim .pin { background: var(--vel); border-color: var(--vel); }
+.sizebox { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: center; }
+.sizebox .x { color: var(--muted); font-family: var(--font-num); }
+.sizebox label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.sub { font-size: .8rem; color: var(--muted); font-family: var(--font-num); min-height: 1.2em; }
+.status { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.status p { margin: 0; }
+.btn { font: 600 .85rem var(--font-body); padding: 6px 12px; border-radius: 5px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+.btn:hover { background: var(--accent-soft); }
+.note { font-size: .88rem; color: var(--muted); margin: 0; }
+.err { color: var(--err); font-size: .88rem; margin: 0; }
+.warnbox { background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); padding: 8px 10px; border-radius: 5px; font-size: .88rem; margin: 0; }
+
+dl.props { display: grid; grid-template-columns: 1fr auto; margin: 0; border-top: 1px solid var(--line); }
+dl.props dt, dl.props dd { padding: 6px 0; border-bottom: 1px solid var(--grid); margin: 0; }
+dl.props dt { color: var(--muted); font-size: .9rem; }
+dl.props dd { font-family: var(--font-num); font-size: .9rem; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 10px; }
+dl.props dd small { color: var(--muted); font-size: .76rem; margin-left: 4px; }
+.split { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+.results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
+@media (max-width: 820px) { .results { grid-template-columns: 1fr; } }
+.stdbig { font-family: var(--font-num); font-size: 2rem; color: var(--accent); line-height: 1.1; }
+.stdbig small { font-size: .9rem; color: var(--muted); margin-left: 3px; }
+.big { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.big .v { font-family: var(--font-num); font-weight: 500; font-size: 2.3rem; line-height: 1.05; letter-spacing: -.02em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.big .v small { font-size: 1rem; color: var(--muted); margin-left: 2px; letter-spacing: 0; }
+.lenrow { display: inline-flex; gap: 6px; align-items: center; }
+.lenrow input { width: 80px; font-size: .88rem !important; padding: 3px 6px !important; }
+
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th { font: 600 .74rem var(--font-body); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+td { font-family: var(--font-num); font-size: .88rem; padding: 6px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+tr.hi td { background: var(--accent-soft); }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--accent-soft); }
+td.flag { color: var(--warn); }
+
+/* mixed air */
+.mixrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 600px) { .mixrow { grid-template-columns: minmax(0, 1fr); } }
+.stream { border-top: 3px solid var(--sc); }
+.card-head { display: flex; align-items: center; gap: 10px; }
+.tag { font-family: var(--font-display); font-weight: 700; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--sc); color: var(--surface); flex: none; }
+.sname { font: 600 1.1rem var(--font-display) !important; background: transparent !important; border-color: transparent !important; padding: 3px 6px !important; }
+.sname:hover { border-color: var(--line) !important; }
+.inputs3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 380px) { .inputs3 { grid-template-columns: minmax(0, 1fr); } }
+.mixres { border-top: 3px solid var(--accent); background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface)); }
+.coil { border-top: 3px solid var(--coil); }
+.coil .big { gap: 8px 22px; }
+.coil .big .v { color: var(--coil); font-size: 2rem; }
+.inputs2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fog { background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); padding: 8px 10px; border-radius: 5px; font-size: .88rem; margin: 0; }
+
+/* charts */
+.chart-scroll { overflow-x: auto; }
+svg.chart { display: block; width: 100%; height: auto; font-family: var(--font-num); }
+svg.psy { min-width: 600px; cursor: crosshair; }
+svg.fric { min-width: 560px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .84rem; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--c); margin-right: 6px; vertical-align: 3px; }
+.legend i.dash { border-top-style: dashed; }
+.legend i.dot { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--c); vertical-align: -1px; }
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; }
+
+.method { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 28px; font-size: .9rem; color: var(--muted); }
+.method h3 { font-size: 1rem; color: var(--ink); margin-bottom: 4px; }
+.method p { margin: 0; max-width: 62ch; }
+.method code { font-family: var(--font-num); font-size: .82rem; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* HVAC calculations */
+.hc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.hc-grid .card { gap: 12px; }
+.hc-head { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.formula { font: 500 .82rem var(--font-num); color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+.hc-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.hc-fields .sub:empty { display: none; }
+.hc-factor { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; font-size: .86rem; color: var(--muted); }
+.hc-factor label { font-size: .76rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.hc-factor input[type="number"] { width: 104px; font-size: .92rem; padding: 4px 8px; }
+.btn.sm { font-size: .78rem; padding: 4px 9px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.hc-eq { font-family: var(--font-num); font-size: .8rem; color: var(--ink); background: var(--bg); border: 1px solid var(--grid); border-radius: 5px; padding: 8px 10px; margin: 0; overflow-wrap: anywhere; }
+.hc-eq:empty { display: none; }
+.hc-fields .var .top { min-height: 0; }
+#tab-calcs .status { align-items: flex-end; }
+#tab-calcs h2 { font-size: 1.05rem; }
+.hc-fields .var { padding: 10px; gap: 6px; }
+.hc-fields .var .name { font-size: .92rem; }
+.hc-fields .var input[type="number"] { font-size: 1.05rem; padding: 6px 9px; }
+#tab-calcs .status .note { font-size: .82rem; }
+/* line up field headers, inputs and notes across each row of property boxes */
+@supports (grid-template-rows: subgrid) {
+  .calc > .var { grid-template-rows: subgrid; grid-row: span 3; row-gap: 8px; align-content: stretch; }
+  .var .top { align-self: start; }
+}
+.hc-stats { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.hc-stat { display: grid; gap: 2px; min-width: 0; }
+.hc-stat .v { font: 500 1.5rem/1.1 var(--font-num); color: var(--accent); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.hc-stat .v small { font-size: .82rem; color: var(--muted); margin-left: 3px; letter-spacing: 0; }
+.hc-stat .conv { font: .74rem var(--font-num); color: var(--muted); overflow-wrap: anywhere; }
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <div class="eyebrow">HVAC airside calculations · ASHRAE Fundamentals methods</div>
+      <h1>Airside Toolkit</h1>
+      <p>Psychrometric state points, airstream mixing and duct sizing in one place. Units and site elevation apply to every tool.</p>
+    </div>
+    <div class="global" aria-label="Shared settings">
+      <div class="field"><span class="lbl">Units</span>
+        <div class="seg" id="g-units"><button type="button" data-v="IP">IP</button><button type="button" data-v="SI">SI</button></div></div>
+      <div class="field" style="width:120px"><label for="g-elev">Elevation <span class="unit" data-u="z"></span></label>
+        <input type="number" id="g-elev" step="any" inputmode="decimal"></div>
+      <div class="derived" id="g-p"></div>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist" id="tabs">
+    <a href="#psych" role="tab" data-tab="psych">Psychrometrics<small>any two properties → state point</small></a>
+    <a href="#mix" role="tab" data-tab="mix">Mixed air<small>two airstreams → mixed state</small></a>
+    <a href="#duct" role="tab" data-tab="duct">Duct sizer<small>airflow, size, velocity, friction</small></a>
+    <a href="#calcs" role="tab" data-tab="calcs">HVAC calculations<small>sensible, air changes, water</small></a>
+  </nav>
+
+  <!-- ================= PSYCHROMETRICS ================= -->
+  <section class="panel" id="tab-psych" role="tabpanel">
+    <section class="card" aria-label="Psychrometric properties">
+      <div class="calc" id="p-calc"></div>
+      <div class="status">
+        <p class="note" id="p-mode"></p>
+        <button type="button" class="btn" id="p-reset">Reset to example</button>
+      </div>
+      <p class="err" id="p-err" hidden></p>
+    </section>
+    <div class="split">
+      <section class="card" id="p-more" aria-live="polite"></section>
+      <section class="card">
+        <div class="chart-head">
+          <h2>Psychrometric chart <span class="unit" id="p-chartsub"></span></h2>
+          <span class="note" id="p-hover">Click the chart to set dry bulb and humidity ratio.</span>
+        </div>
+        <div class="chart-scroll"><svg class="chart psy" id="p-chart" viewBox="0 0 900 580" role="img" aria-label="Psychrometric chart with the current state point and its property lines"></svg></div>
+        <div class="legend">
+          <span style="--c:var(--c-sat)"><i></i>Saturation</span>
+          <span style="--c:var(--c-rh)"><i></i>Relative humidity</span>
+          <span style="--c:var(--c-wb)"><i class="dash"></i>Wet bulb</span>
+          <span style="--c:var(--c-h)"><i></i>Enthalpy</span>
+          <span style="--c:var(--c-v)"><i></i>Specific volume</span>
+          <span style="--c:var(--accent)"><i class="dot"></i>State point</span>
+        </div>
+      </section>
+    </div>
+    <section class="method">
+      <div><h3>Any two properties</h3><p>The two values you typed most recently are the inputs; the rest are calculated and shown dashed. Typing into a calculated field makes it an input and releases the older one. Dew point with humidity ratio, and wet bulb with enthalpy, don't fix a state, so those pairs are rejected.</p></div>
+      <div><h3>Equations</h3><p>Saturation pressure is Hyland–Wexler; humidity ratio from wet bulb uses ASHRAE eq. 33, or eq. 35 below freezing. Enthalpy is referenced to 0 °F dry air in IP and 0 °C in SI, so the two enthalpy numbers are not simple conversions of each other. Pressure comes from the standard atmosphere at the site elevation.</p></div>
+      <div><h3>Reading the chart</h3><p>Lines through the state point trace each property to its scale: wet bulb and dew point at the saturation curve, enthalpy on the scale beyond it, dry bulb along the bottom and humidity ratio on the right. Wet-bulb and enthalpy lines run nearly parallel, which is why that pair can't be used as inputs.</p></div>
+    </section>
+  </section>
+
+  <!-- ================= MIXED AIR ================= -->
+  <section class="panel" id="tab-mix" role="tabpanel" hidden>
+    <section class="controls" aria-label="Mixed air settings">
+      <div class="field"><span class="lbl">Airflow basis</span>
+        <div class="seg" id="m-basis">
+          <button type="button" data-v="actual" title="Volume at each stream's own temperature, humidity and site pressure">Actual</button>
+          <button type="button" data-v="standard" title="Volume referenced to standard air, 0.075 lb/ft³ (1.2 kg/m³)">Standard</button>
+        </div></div>
+      <p class="note" style="flex:1 1 300px">Mixing is done on dry-air mass flow with humidity ratio and enthalpy, at the site pressure set above.</p>
+    </section>
+    <div class="mixrow">
+      <section class="card stream" id="m-s0" style="--sc: var(--a)"></section>
+      <section class="card stream" id="m-s1" style="--sc: var(--b)"></section>
+      <section class="card mixres" aria-live="polite">
+        <div class="card-head"><span class="tag" style="--sc: var(--accent)">M</span><h2>Mixed air</h2></div>
+        <div id="m-out"></div>
+      </section>
+      <section class="card coil" aria-live="polite">
+        <div class="card-head"><span class="tag" style="--sc: var(--coil)">C</span><h2>Cooling coil</h2></div>
+        <p class="note" style="margin-top:-6px">Mixed air enters the coil. Enter the leaving condition.</p>
+        <div class="inputs2">
+          <div class="field"><label for="m-ct">Leaving dry bulb <span class="unit" data-u="t"></span></label><input type="number" id="m-ct" step="any" inputmode="decimal"></div>
+          <div class="field"><label for="m-cw">Leaving wet bulb <span class="unit" data-u="t"></span></label><input type="number" id="m-cw" step="any" inputmode="decimal"></div>
+        </div>
+        <p class="err" id="m-ce" hidden></p>
+        <div id="m-coilout"></div>
+      </section>
+    </div>
+    <section class="card">
+      <div class="chart-head">
+        <h2>Psychrometric chart <span class="unit" id="m-chartsub"></span></h2>
+        <div class="legend" id="m-legend"></div>
+      </div>
+      <div class="chart-scroll"><svg class="chart psy" id="m-chart" viewBox="0 0 900 580" role="img" aria-label="Psychrometric chart showing both streams, the mixing line and the mixed state"></svg></div>
+    </section>
+    <section class="method">
+      <div><h3>How the mix is computed</h3><p>Each stream's humidity ratio comes from dry bulb and thermodynamic wet bulb. Dry-air mass flow is volume divided by specific volume. Humidity ratio and enthalpy are mass-weighted, and the mixed dry bulb is solved back from <code>h = 0.240·t + W(1061 + 0.444·t)</code>.</p></div>
+      <div><h3>Why not average by CFM</h3><p>A CFM-weighted dry bulb ignores that warm, humid air is less dense. For typical outside/return mixes the error is a few tenths of a degree, shown in the result panel. It grows with large temperature spreads, high elevation or one very humid stream.</p></div>
+      <div><h3>Cooling coil</h3><p>Condensate is dry-air mass flow × (W entering − W leaving), at 8.34 lb/gal. Total load is <code>ṁ[(h₁ − h₂) − (W₁ − W₂)·h_w]</code> with condensate leaving at the leaving dry bulb. Sensible load is cooling at constant humidity ratio; latent is the rest. The apparatus dew point is where the coil line, extended, meets saturation, and bypass factor is (t₂ − ADP)/(t₁ − ADP).</p></div>
+      <div><h3>Fogging</h3><p>If the mixing line crosses saturation, the calculator reports the equilibrium state: saturated air at a slightly higher temperature, with the excess moisture carried as liquid.</p></div>
+    </section>
+  </section>
+
+  <!-- ================= DUCT SIZER ================= -->
+  <section class="panel" id="tab-duct" role="tabpanel" hidden>
+    <section class="controls" aria-label="Duct settings">
+      <div class="field"><span class="lbl">Shape</span>
+        <div class="seg" id="d-shape"><button type="button" data-v="round">Round</button><button type="button" data-v="rect">Rectangular</button></div></div>
+      <div class="field" style="flex:1 1 240px">
+        <label for="d-mat">Duct material (roughness)</label>
+        <select id="d-mat">
+          <option value="0.0001">Smooth · 0.03 mm (PVC, aluminum, clean steel)</option>
+          <option value="0.0003">Medium smooth · 0.09 mm (galvanized steel)</option>
+          <option value="0.0005">Average · 0.15 mm</option>
+          <option value="0.003">Medium rough · 0.9 mm (rigid fibrous glass duct)</option>
+          <option value="0.01">Rough · 3.0 mm (flex duct, fully extended)</option>
+          <option value="custom">Custom roughness</option>
+        </select></div>
+      <div class="field" id="d-epsWrap" style="width:120px" hidden>
+        <label for="d-eps">ε <span class="unit" data-u="eps"></span></label>
+        <input type="number" id="d-eps" step="any" inputmode="decimal"></div>
+      <div class="field"><span class="lbl">Air</span>
+        <div class="seg" id="d-airMode"><button type="button" data-v="std" title="0.075 lb/ft³, 70 °F, sea level">Standard</button><button type="button" data-v="custom" title="Actual temperature at the site elevation">Actual</button></div></div>
+      <div class="field" id="d-tWrap" style="width:100px">
+        <label for="d-t">Air temp <span class="unit" data-u="t"></span></label>
+        <input type="number" id="d-t" step="any" inputmode="decimal"></div>
+      <div class="derived" id="d-air"></div>
+    </section>
+    <section class="card" aria-label="Duct calculator">
+      <div class="calc">
+        <div class="var" id="d-v-Q">
+          <div class="top"><span class="name">Airflow <span class="unit" data-u="q"></span></span><button type="button" class="pin" data-var="Q"></button></div>
+          <input type="number" id="d-Q" data-var="Q" data-key="Q" data-kind="q" step="any" min="0" inputmode="decimal" aria-label="Airflow">
+          <div class="sub" id="d-sub-Q"></div>
+        </div>
+        <div class="var" id="d-v-S">
+          <div class="top"><span class="name">Duct size <span class="unit" data-u="d"></span></span><button type="button" class="pin" data-var="S"></button></div>
+          <input type="number" id="d-D" data-var="S" data-key="D" data-kind="d" step="any" min="0" inputmode="decimal" aria-label="Diameter" class="d-round">
+          <div class="sizebox d-rect">
+            <input type="number" id="d-W" data-var="S" data-key="W" data-kind="d" step="any" min="0" inputmode="decimal" aria-label="Width">
+            <span class="x">×</span>
+            <input type="number" id="d-H" data-key="H" data-kind="d" step="any" min="0" inputmode="decimal" aria-label="Height (fixed)">
+            <label for="d-W">Width</label><span></span><label for="d-H">Height · fixed</label>
+          </div>
+          <div class="sub" id="d-sub-S"></div>
+        </div>
+        <div class="var" id="d-v-V">
+          <div class="top"><span class="name">Velocity <span class="unit" data-u="v"></span></span><button type="button" class="pin" data-var="V"></button></div>
+          <input type="number" id="d-V" data-var="V" data-key="V" data-kind="v" step="any" min="0" inputmode="decimal" aria-label="Velocity">
+          <div class="sub" id="d-sub-V"></div>
+        </div>
+        <div class="var" id="d-v-fr">
+          <div class="top"><span class="name">Friction rate <span class="unit" data-u="fr"></span></span><button type="button" class="pin" data-var="fr"></button></div>
+          <input type="number" id="d-fr" data-var="fr" data-key="fr" data-kind="fr" step="any" min="0" inputmode="decimal" aria-label="Friction rate">
+          <div class="sub" id="d-sub-fr"></div>
+        </div>
+      </div>
+      <div class="status">
+        <p class="note" id="d-mode"></p>
+        <button type="button" class="btn" id="d-reset">Reset to example</button>
+      </div>
+      <p class="err" id="d-err" hidden></p>
+    </section>
+    <section class="results" aria-live="polite">
+      <div class="card" id="d-std" style="border-top:3px solid var(--accent)"></div>
+      <div class="card" id="d-props"></div>
+    </section>
+    <section class="card">
+      <div class="chart-head">
+        <h2>Friction chart <span class="unit" id="d-chartsub"></span></h2>
+        <div class="legend">
+          <span style="--c:var(--sheet)"><i></i>Round duct diameter</span>
+          <span style="--c:var(--vel)"><i class="dash"></i>Velocity</span>
+          <span style="--c:var(--accent)"><i class="dot"></i>Operating point</span>
+        </div>
+      </div>
+      <div class="chart-scroll"><svg class="chart fric" id="d-chart" viewBox="0 0 880 520" role="img" aria-label="Duct friction chart: airflow against friction rate, with duct-diameter and velocity lines and the operating point"></svg></div>
+    </section>
+    <section class="method">
+      <div><h3>How the inputs work</h3><p>Enter any two of airflow, size, velocity and friction rate. Typing in a calculated field makes it an input and releases the oldest one; click a tag to release or keep a value. Velocity plus friction plus airflow (or size) treats velocity and friction as maximums, and the stricter one governs.</p></div>
+      <div><h3>Friction</h3><p>Darcy–Weisbach, <code>Δp = f·(L/D)·ρV²/2</code>, with the Colebrook friction factor and the selected roughness. Galvanized steel at standard air is the basis of the ASHRAE friction chart and slide-rule duct calculators. Fitting losses are not included.</p></div>
+      <div><h3>Rectangular duct</h3><p>Height is held fixed and width is solved. Friction uses the Huebscher equivalent, <code>De = 1.30·(ab)^0.625 / (a+b)^0.25</code>; velocity uses the actual area. Aspect ratios above 4:1 are flagged.</p></div>
+      <div><h3>Actual air</h3><p>Density from dry-air ideal gas at the air temperature and the site pressure for the elevation above; viscosity from Sutherland's law. Airflow is then actual volume.</p></div>
+    </section>
+  </section>
+
+  <!-- ================= HVAC CALCULATIONS ================= -->
+  <section class="panel" id="tab-calcs" role="tabpanel" hidden>
+    <div class="hc-grid">
+      <section class="card" id="hc-sens" aria-label="Sensible air capacity">
+        <div class="hc-head"><h2>Sensible air capacity</h2><code class="formula" id="hc-sens-formula"></code></div>
+        <div class="hc-stats" id="hc-sens-stats" aria-live="polite"></div>
+        <div class="hc-fields" id="hc-sens-f"></div>
+        <div class="hc-factor">
+          <label for="hc-sens-k">Factor</label>
+          <input type="number" id="hc-sens-k" step="any" min="0" inputmode="decimal">
+          <span class="unit" id="hc-sens-ku"></span>
+          <button type="button" class="btn sm" id="hc-sens-std"></button>
+          <button type="button" class="btn sm" id="hc-sens-site"></button>
+        </div>
+        <p class="hc-eq" id="hc-sens-eq"></p>
+        <p class="err" id="hc-sens-err" hidden></p>
+        <div class="status"><p class="note">1.08 = 0.075 lb/ft³ × 0.24 Btu/lb·°F × 60 min/h, standard air at sea level.</p><button type="button" class="btn sm" data-reset="sens">Reset</button></div>
+      </section>
+
+      <section class="card" id="hc-water" aria-label="Water capacity">
+        <div class="hc-head"><h2>Water capacity</h2><code class="formula" id="hc-water-formula"></code></div>
+        <div class="hc-stats" id="hc-water-stats" aria-live="polite"></div>
+        <div class="hc-fields" id="hc-water-f"></div>
+        <div class="hc-factor">
+          <label for="hc-water-k">Factor</label>
+          <input type="number" id="hc-water-k" step="any" min="0" inputmode="decimal">
+          <span class="unit" id="hc-water-ku"></span>
+          <button type="button" class="btn sm" id="hc-water-std"></button>
+        </div>
+        <p class="hc-eq" id="hc-water-eq"></p>
+        <p class="err" id="hc-water-err" hidden></p>
+        <div class="status"><p class="note">500 = 8.33 lb/gal × 60 min/h × 1.0 Btu/lb·°F. Glycol solutions use a lower factor; enter it from the fluid's density and specific heat.</p><button type="button" class="btn sm" data-reset="water">Reset</button></div>
+      </section>
+
+      <section class="card" id="hc-ach" aria-label="Air changes per hour">
+        <div class="hc-head">
+          <h2>Air changes per hour</h2><code class="formula" id="hc-ach-formula"></code>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;flex-basis:100%">
+            <div class="seg" id="hc-ach-mode"><button type="button" data-v="dims">Room dimensions</button><button type="button" data-v="vol">Room volume</button></div>
+          </div>
+        </div>
+        <div class="hc-fields" id="hc-ach-f"></div>
+        <p class="hc-eq" id="hc-ach-eq"></p>
+        <p class="note" id="hc-ach-extra"></p>
+        <p class="err" id="hc-ach-err" hidden></p>
+        <div class="status"><p class="note">Airflow is the supply (or exhaust) rate through the room; volume is the room's net air volume.</p><button type="button" class="btn sm" data-reset="ach">Reset</button></div>
+      </section>
+    </div>
+    <section class="method">
+      <div><h3>How the inputs work</h3><p>Every field but one is an input. The calculated field is dashed. Typing into it makes it an input, and the field you edited least recently becomes the calculated one. Click a field's Input tag to calculate that field instead.</p></div>
+      <div><h3>Sensible factor</h3><p>1.08 assumes standard air. "Site elevation" scales it by barometric pressure at the elevation set above, holding 70 °F; at 5,000 ft it drops to about 0.90. For actual CFM at other temperatures, scale by 530 / (t + 460).</p></div>
+      <div><h3>SI units</h3><p>The same relations are used with converted units: 1.08 becomes about 1.207 W per L/s·K, 500 becomes about 4,181 W per L/s·K, and the air change constant becomes 3.6 (L/s to m³/h).</p></div>
+    </section>
+  </section>
+</div>
+
+<script>
+/*PSY*/
+</script>
+<script>
+/*DUCT*/
+</script>
+<script>
+/*APP*/
+</script>
