@@ -1,0 +1,1715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Psychrometrics, airstream mixing with a cooling coil, duct sizing and quick HVAC calculations.">
+<style>:root{color-scheme:light}body{margin:0;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Airside Toolkit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: header with shared settings → tool tabs → each tool: input grid, results, chart, method notes */
+:root {
+  --bg: #f2f4f5; --surface: #ffffff; --ink: #171d21; --muted: #5b6770; --line: #d6dde1; --grid: #e9edf0;
+  --accent: #1d5f8f; --accent-soft: #e4eef6;
+  --a: #b4531a; --b: #6a4c9c;
+  --sheet: #8a96a0; --vel: #b4621a;
+  --c-sat: #26323a; --c-rh: #b7c2c9; --c-wb: #5f93bb; --c-h: #c08a52; --c-v: #6d9a6b;
+  --coil: #0f7b6c;
+  --warn: #9a5b00; --warn-soft: #fff3df; --err: #b42318;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101518; --surface: #192025; --ink: #e5ebef; --muted: #96a3ad; --line: #2c363d; --grid: #222a30;
+    --accent: #6cb2e8; --accent-soft: #16293a; --a: #e8894c; --b: #a98be0; --sheet: #6b7882; --vel: #e8955a;
+    --c-sat: #d5dde2; --c-rh: #46535c; --c-wb: #4f86b3; --c-h: #a8794a; --c-v: #5b8a59;
+    --coil: #4fc4ac; --warn: #f0b45a; --warn-soft: #33270f; --err: #ff8a7a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101518; --surface: #192025; --ink: #e5ebef; --muted: #96a3ad; --line: #2c363d; --grid: #222a30;
+  --accent: #6cb2e8; --accent-soft: #16293a; --a: #e8894c; --b: #a98be0; --sheet: #6b7882; --vel: #e8955a;
+  --c-sat: #d5dde2; --c-rh: #46535c; --c-wb: #4f86b3; --c-h: #a8794a; --c-v: #5b8a59;
+  --coil: #4fc4ac; --warn: #f0b45a; --warn-soft: #33270f; --err: #ff8a7a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-inline: 20px; padding-block: 22px 48px; display: grid; gap: 18px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1.75rem; font-weight: 700; }
+h2 { font-size: 1.1rem; font-weight: 600; }
+.eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; font-weight: 600; color: var(--muted); }
+.topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px 24px; }
+.topbar p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+.global { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; min-width: 0; }
+.field > label, .lbl { font-size: .76rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.unit { font-family: var(--font-num); font-size: .76rem; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+.derived { font-family: var(--font-num); font-size: .82rem; color: var(--muted); padding-bottom: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; max-width: 100%; background: var(--surface); }
+.seg button { font: 500 .9rem var(--font-body); padding: 7px 12px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+button:focus-visible, input:focus-visible, select:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type="number"], input[type="text"], select {
+  font: 500 1rem var(--font-num); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 5px; padding: 7px 9px; width: 100%; min-width: 0; font-variant-numeric: tabular-nums;
+}
+.controls input[type="number"] { background: var(--bg); }
+select { font-family: var(--font-body); font-size: .92rem; }
+input.bad { border-color: var(--err) !important; }
+
+.tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.tabs a { font: 600 1.1rem var(--font-display); padding: 10px 18px 9px; color: var(--muted); text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs a small { display: block; font: 400 .78rem var(--font-body); color: var(--muted); }
+.tabs a[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs a:focus-visible { outline: 2px solid var(--accent); }
+@media (max-width: 640px) { .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .tabs a { white-space: nowrap; padding: 10px 12px 9px; font-size: 1rem; } .tabs a small { display: none; } }
+.panel { display: grid; gap: 18px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; align-content: start; }
+.calc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .calc { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .calc { grid-template-columns: minmax(0, 1fr); } }
+.var { border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-content: start; background: var(--bg); min-width: 0; }
+.var.pinned { background: var(--surface); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: inset 0 3px 0 var(--accent); }
+.var .top { display: flex; flex-wrap: nowrap; justify-content: space-between; align-items: flex-start; gap: 4px 8px; min-height: 22px; }
+.var .top .pin { flex: none; }
+.var .name { font: 600 1.02rem var(--font-display); min-width: 0; }
+.var .name .unit { margin-left: 4px; }
+.var input[type="number"] { font-size: 1.25rem; padding: 7px 10px; }
+.var.info { background: transparent; border-style: dashed; }
+.var.info .big-num { font: 500 1.25rem var(--font-num); padding: 8px 0 7px; color: var(--ink); }
+.var:not(.pinned) input.calcd { color: var(--accent); border-style: dashed; }
+.pin { font: 600 .68rem var(--font-body); text-transform: uppercase; letter-spacing: .06em; border-radius: 99px; padding: 3px 9px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--muted); white-space: nowrap; }
+.var.pinned .pin { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.var.pinned.lim .pin { background: var(--vel); border-color: var(--vel); }
+.sizebox { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: center; }
+.sizebox .x { color: var(--muted); font-family: var(--font-num); }
+.sizebox label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.sub { font-size: .8rem; color: var(--muted); font-family: var(--font-num); min-height: 1.2em; }
+.status { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.status p { margin: 0; }
+.btn { font: 600 .85rem var(--font-body); padding: 6px 12px; border-radius: 5px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+.btn:hover { background: var(--accent-soft); }
+.note { font-size: .88rem; color: var(--muted); margin: 0; }
+.err { color: var(--err); font-size: .88rem; margin: 0; }
+.warnbox { background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); padding: 8px 10px; border-radius: 5px; font-size: .88rem; margin: 0; }
+
+dl.props { display: grid; grid-template-columns: 1fr auto; margin: 0; border-top: 1px solid var(--line); }
+dl.props dt, dl.props dd { padding: 6px 0; border-bottom: 1px solid var(--grid); margin: 0; }
+dl.props dt { color: var(--muted); font-size: .9rem; }
+dl.props dd { font-family: var(--font-num); font-size: .9rem; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 10px; }
+dl.props dd small { color: var(--muted); font-size: .76rem; margin-left: 4px; }
+.split { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+.results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
+@media (max-width: 820px) { .results { grid-template-columns: 1fr; } }
+.stdbig { font-family: var(--font-num); font-size: 2rem; color: var(--accent); line-height: 1.1; }
+.stdbig small { font-size: .9rem; color: var(--muted); margin-left: 3px; }
+.big { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.big .v { font-family: var(--font-num); font-weight: 500; font-size: 2.3rem; line-height: 1.05; letter-spacing: -.02em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.big .v small { font-size: 1rem; color: var(--muted); margin-left: 2px; letter-spacing: 0; }
+.lenrow { display: inline-flex; gap: 6px; align-items: center; }
+.lenrow input { width: 80px; font-size: .88rem !important; padding: 3px 6px !important; }
+
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th { font: 600 .74rem var(--font-body); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+td { font-family: var(--font-num); font-size: .88rem; padding: 6px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+tr.hi td { background: var(--accent-soft); }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--accent-soft); }
+td.flag { color: var(--warn); }
+
+/* mixed air */
+.mixrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 600px) { .mixrow { grid-template-columns: minmax(0, 1fr); } }
+.stream { border-top: 3px solid var(--sc); }
+.card-head { display: flex; align-items: center; gap: 10px; }
+.tag { font-family: var(--font-display); font-weight: 700; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--sc); color: var(--surface); flex: none; }
+.sname { font: 600 1.1rem var(--font-display) !important; background: transparent !important; border-color: transparent !important; padding: 3px 6px !important; }
+.sname:hover { border-color: var(--line) !important; }
+.inputs3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 380px) { .inputs3 { grid-template-columns: minmax(0, 1fr); } }
+.mixres { border-top: 3px solid var(--accent); background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface)); }
+.coil { border-top: 3px solid var(--coil); }
+.coil .big { gap: 8px 22px; }
+.coil .big .v { color: var(--coil); font-size: 2rem; }
+.inputs2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fog { background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); padding: 8px 10px; border-radius: 5px; font-size: .88rem; margin: 0; }
+
+/* charts */
+.chart-scroll { overflow-x: auto; }
+svg.chart { display: block; width: 100%; height: auto; font-family: var(--font-num); }
+svg.psy { min-width: 600px; cursor: crosshair; }
+svg.fric { min-width: 560px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .84rem; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--c); margin-right: 6px; vertical-align: 3px; }
+.legend i.dash { border-top-style: dashed; }
+.legend i.dot { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--c); vertical-align: -1px; }
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; }
+
+.method { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 28px; font-size: .9rem; color: var(--muted); }
+.method h3 { font-size: 1rem; color: var(--ink); margin-bottom: 4px; }
+.method p { margin: 0; max-width: 62ch; }
+.method code { font-family: var(--font-num); font-size: .82rem; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* HVAC calculations */
+.hc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.hc-grid .card { gap: 12px; }
+.hc-head { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.formula { font: 500 .82rem var(--font-num); color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+.hc-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.hc-fields .sub:empty { display: none; }
+.hc-factor { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; font-size: .86rem; color: var(--muted); }
+.hc-factor label { font-size: .76rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.hc-factor input[type="number"] { width: 104px; font-size: .92rem; padding: 4px 8px; }
+.btn.sm { font-size: .78rem; padding: 4px 9px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.hc-eq { font-family: var(--font-num); font-size: .8rem; color: var(--ink); background: var(--bg); border: 1px solid var(--grid); border-radius: 5px; padding: 8px 10px; margin: 0; overflow-wrap: anywhere; }
+.hc-eq:empty { display: none; }
+.hc-fields .var .top { min-height: 0; }
+#tab-calcs .status { align-items: flex-end; }
+#tab-calcs h2 { font-size: 1.05rem; }
+.hc-fields .var { padding: 10px; gap: 6px; }
+.hc-fields .var .name { font-size: .92rem; }
+.hc-fields .var input[type="number"] { font-size: 1.05rem; padding: 6px 9px; }
+#tab-calcs .status .note { font-size: .82rem; }
+/* line up field headers, inputs and notes across each row of property boxes */
+@supports (grid-template-rows: subgrid) {
+  .calc > .var { grid-template-rows: subgrid; grid-row: span 3; row-gap: 8px; align-content: stretch; }
+  .var .top { align-self: start; }
+}
+.hc-stats { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.hc-stat { display: grid; gap: 2px; min-width: 0; }
+.hc-stat .v { font: 500 1.5rem/1.1 var(--font-num); color: var(--accent); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.hc-stat .v small { font-size: .82rem; color: var(--muted); margin-left: 3px; letter-spacing: 0; }
+.hc-stat .conv { font: .74rem var(--font-num); color: var(--muted); overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <div class="eyebrow">HVAC airside calculations · ASHRAE Fundamentals methods</div>
+      <h1>Airside Toolkit</h1>
+      <p>Psychrometric state points, airstream mixing and duct sizing in one place. Units and site elevation apply to every tool.</p>
+    </div>
+    <div class="global" aria-label="Shared settings">
+      <div class="field"><span class="lbl">Units</span>
+        <div class="seg" id="g-units"><button type="button" data-v="IP">IP</button><button type="button" data-v="SI">SI</button></div></div>
+      <div class="field" style="width:120px"><label for="g-elev">Elevation <span class="unit" data-u="z"></span></label>
+        <input type="number" id="g-elev" step="any" inputmode="decimal"></div>
+      <div class="derived" id="g-p"></div>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist" id="tabs">
+    <a href="#psych" role="tab" data-tab="psych">Psychrometrics<small>any two properties → state point</small></a>
+    <a href="#mix" role="tab" data-tab="mix">Mixed air<small>two airstreams → mixed state</small></a>
+    <a href="#duct" role="tab" data-tab="duct">Duct sizer<small>airflow, size, velocity, friction</small></a>
+    <a href="#calcs" role="tab" data-tab="calcs">HVAC calculations<small>sensible, air changes, water</small></a>
+  </nav>
+
+  <!-- ================= PSYCHROMETRICS ================= -->
+  <section class="panel" id="tab-psych" role="tabpanel">
+    <section class="card" aria-label="Psychrometric properties">
+      <div class="calc" id="p-calc"></div>
+      <div class="status">
+        <p class="note" id="p-mode"></p>
+        <button type="button" class="btn" id="p-reset">Reset to example</button>
+      </div>
+      <p class="err" id="p-err" hidden></p>
+    </section>
+    <div class="split">
+      <section class="card" id="p-more" aria-live="polite"></section>
+      <section class="card">
+        <div class="chart-head">
+          <h2>Psychrometric chart <span class="unit" id="p-chartsub"></span></h2>
+          <span class="note" id="p-hover">Click the chart to set dry bulb and humidity ratio.</span>
+        </div>
+        <div class="chart-scroll"><svg class="chart psy" id="p-chart" viewBox="0 0 900 580" role="img" aria-label="Psychrometric chart with the current state point and its property lines"></svg></div>
+        <div class="legend">
+          <span style="--c:var(--c-sat)"><i></i>Saturation</span>
+          <span style="--c:var(--c-rh)"><i></i>Relative humidity</span>
+          <span style="--c:var(--c-wb)"><i class="dash"></i>Wet bulb</span>
+          <span style="--c:var(--c-h)"><i></i>Enthalpy</span>
+          <span style="--c:var(--c-v)"><i></i>Specific volume</span>
+          <span style="--c:var(--accent)"><i class="dot"></i>State point</span>
+        </div>
+      </section>
+    </div>
+    <section class="method">
+      <div><h3>Any two properties</h3><p>The two values you typed most recently are the inputs; the rest are calculated and shown dashed. Typing into a calculated field makes it an input and releases the older one. Dew point with humidity ratio, and wet bulb with enthalpy, don't fix a state, so those pairs are rejected.</p></div>
+      <div><h3>Equations</h3><p>Saturation pressure is Hyland–Wexler; humidity ratio from wet bulb uses ASHRAE eq. 33, or eq. 35 below freezing. Enthalpy is referenced to 0 °F dry air in IP and 0 °C in SI, so the two enthalpy numbers are not simple conversions of each other. Pressure comes from the standard atmosphere at the site elevation.</p></div>
+      <div><h3>Reading the chart</h3><p>Lines through the state point trace each property to its scale: wet bulb and dew point at the saturation curve, enthalpy on the scale beyond it, dry bulb along the bottom and humidity ratio on the right. Wet-bulb and enthalpy lines run nearly parallel, which is why that pair can't be used as inputs.</p></div>
+    </section>
+  </section>
+
+  <!-- ================= MIXED AIR ================= -->
+  <section class="panel" id="tab-mix" role="tabpanel" hidden>
+    <section class="controls" aria-label="Mixed air settings">
+      <div class="field"><span class="lbl">Airflow basis</span>
+        <div class="seg" id="m-basis">
+          <button type="button" data-v="actual" title="Volume at each stream's own temperature, humidity and site pressure">Actual</button>
+          <button type="button" data-v="standard" title="Volume referenced to standard air, 0.075 lb/ft³ (1.2 kg/m³)">Standard</button>
+        </div></div>
+      <p class="note" style="flex:1 1 300px">Mixing is done on dry-air mass flow with humidity ratio and enthalpy, at the site pressure set above.</p>
+    </section>
+    <div class="mixrow">
+      <section class="card stream" id="m-s0" style="--sc: var(--a)"></section>
+      <section class="card stream" id="m-s1" style="--sc: var(--b)"></section>
+      <section class="card mixres" aria-live="polite">
+        <div class="card-head"><span class="tag" style="--sc: var(--accent)">M</span><h2>Mixed air</h2></div>
+        <div id="m-out"></div>
+      </section>
+      <section class="card coil" aria-live="polite">
+        <div class="card-head"><span class="tag" style="--sc: var(--coil)">C</span><h2>Cooling coil</h2></div>
+        <p class="note" style="margin-top:-6px">Mixed air enters the coil. Enter the leaving condition.</p>
+        <div class="inputs2">
+          <div class="field"><label for="m-ct">Leaving dry bulb <span class="unit" data-u="t"></span></label><input type="number" id="m-ct" step="any" inputmode="decimal"></div>
+          <div class="field"><label for="m-cw">Leaving wet bulb <span class="unit" data-u="t"></span></label><input type="number" id="m-cw" step="any" inputmode="decimal"></div>
+        </div>
+        <p class="err" id="m-ce" hidden></p>
+        <div id="m-coilout"></div>
+      </section>
+    </div>
+    <section class="card">
+      <div class="chart-head">
+        <h2>Psychrometric chart <span class="unit" id="m-chartsub"></span></h2>
+        <div class="legend" id="m-legend"></div>
+      </div>
+      <div class="chart-scroll"><svg class="chart psy" id="m-chart" viewBox="0 0 900 580" role="img" aria-label="Psychrometric chart showing both streams, the mixing line and the mixed state"></svg></div>
+    </section>
+    <section class="method">
+      <div><h3>How the mix is computed</h3><p>Each stream's humidity ratio comes from dry bulb and thermodynamic wet bulb. Dry-air mass flow is volume divided by specific volume. Humidity ratio and enthalpy are mass-weighted, and the mixed dry bulb is solved back from <code>h = 0.240·t + W(1061 + 0.444·t)</code>.</p></div>
+      <div><h3>Why not average by CFM</h3><p>A CFM-weighted dry bulb ignores that warm, humid air is less dense. For typical outside/return mixes the error is a few tenths of a degree, shown in the result panel. It grows with large temperature spreads, high elevation or one very humid stream.</p></div>
+      <div><h3>Cooling coil</h3><p>Condensate is dry-air mass flow × (W entering − W leaving), at 8.34 lb/gal. Total load is <code>ṁ[(h₁ − h₂) − (W₁ − W₂)·h_w]</code> with condensate leaving at the leaving dry bulb. Sensible load is cooling at constant humidity ratio; latent is the rest. The apparatus dew point is where the coil line, extended, meets saturation, and bypass factor is (t₂ − ADP)/(t₁ − ADP).</p></div>
+      <div><h3>Fogging</h3><p>If the mixing line crosses saturation, the calculator reports the equilibrium state: saturated air at a slightly higher temperature, with the excess moisture carried as liquid.</p></div>
+    </section>
+  </section>
+
+  <!-- ================= DUCT SIZER ================= -->
+  <section class="panel" id="tab-duct" role="tabpanel" hidden>
+    <section class="controls" aria-label="Duct settings">
+      <div class="field"><span class="lbl">Shape</span>
+        <div class="seg" id="d-shape"><button type="button" data-v="round">Round</button><button type="button" data-v="rect">Rectangular</button></div></div>
+      <div class="field" style="flex:1 1 240px">
+        <label for="d-mat">Duct material (roughness)</label>
+        <select id="d-mat">
+          <option value="0.0001">Smooth · 0.03 mm (PVC, aluminum, clean steel)</option>
+          <option value="0.0003">Medium smooth · 0.09 mm (galvanized steel)</option>
+          <option value="0.0005">Average · 0.15 mm</option>
+          <option value="0.003">Medium rough · 0.9 mm (rigid fibrous glass duct)</option>
+          <option value="0.01">Rough · 3.0 mm (flex duct, fully extended)</option>
+          <option value="custom">Custom roughness</option>
+        </select></div>
+      <div class="field" id="d-epsWrap" style="width:120px" hidden>
+        <label for="d-eps">ε <span class="unit" data-u="eps"></span></label>
+        <input type="number" id="d-eps" step="any" inputmode="decimal"></div>
+      <div class="field"><span class="lbl">Air</span>
+        <div class="seg" id="d-airMode"><button type="button" data-v="std" title="0.075 lb/ft³, 70 °F, sea level">Standard</button><button type="button" data-v="custom" title="Actual temperature at the site elevation">Actual</button></div></div>
+      <div class="field" id="d-tWrap" style="width:100px">
+        <label for="d-t">Air temp <span class="unit" data-u="t"></span></label>
+        <input type="number" id="d-t" step="any" inputmode="decimal"></div>
+      <div class="derived" id="d-air"></div>
+    </section>
+    <section class="card" aria-label="Duct calculator">
+      <div class="calc">
+        <div class="var" id="d-v-Q">
+          <div class="top"><span class="name">Airflow <span class="unit" data-u="q"></span></span><button type="button" class="pin" data-var="Q"></button></div>
+          <input type="number" id="d-Q" data-var="Q" data-key="Q" data-kind="q" step="any" min="0" inputmode="decimal" aria-label="Airflow">
+          <div class="sub" id="d-sub-Q"></div>
+        </div>
+        <div class="var" id="d-v-S">
+          <div class="top"><span class="name">Duct size <span class="unit" data-u="d"></span></span><button type="button" class="pin" data-var="S"></button></div>
+          <input type="number" id="d-D" data-var="S" data-key="D" data-kind="d" step="any" min="0" inputmode="decimal" aria-label="Diameter" class="d-round">
+          <div class="sizebox d-rect">
+            <input type="number" id="d-W" data-var="S" data-key="W" data-kind="d" step="any" min="0" inputmode="decimal" aria-label="Width">
+            <span class="x">×</span>
+            <input type="number" id="d-H" data-key="H" data-kind="d" step="any" min="0" inputmode="decimal" aria-label="Height (fixed)">
+            <label for="d-W">Width</label><span></span><label for="d-H">Height · fixed</label>
+          </div>
+          <div class="sub" id="d-sub-S"></div>
+        </div>
+        <div class="var" id="d-v-V">
+          <div class="top"><span class="name">Velocity <span class="unit" data-u="v"></span></span><button type="button" class="pin" data-var="V"></button></div>
+          <input type="number" id="d-V" data-var="V" data-key="V" data-kind="v" step="any" min="0" inputmode="decimal" aria-label="Velocity">
+          <div class="sub" id="d-sub-V"></div>
+        </div>
+        <div class="var" id="d-v-fr">
+          <div class="top"><span class="name">Friction rate <span class="unit" data-u="fr"></span></span><button type="button" class="pin" data-var="fr"></button></div>
+          <input type="number" id="d-fr" data-var="fr" data-key="fr" data-kind="fr" step="any" min="0" inputmode="decimal" aria-label="Friction rate">
+          <div class="sub" id="d-sub-fr"></div>
+        </div>
+      </div>
+      <div class="status">
+        <p class="note" id="d-mode"></p>
+        <button type="button" class="btn" id="d-reset">Reset to example</button>
+      </div>
+      <p class="err" id="d-err" hidden></p>
+    </section>
+    <section class="results" aria-live="polite">
+      <div class="card" id="d-std" style="border-top:3px solid var(--accent)"></div>
+      <div class="card" id="d-props"></div>
+    </section>
+    <section class="card">
+      <div class="chart-head">
+        <h2>Friction chart <span class="unit" id="d-chartsub"></span></h2>
+        <div class="legend">
+          <span style="--c:var(--sheet)"><i></i>Round duct diameter</span>
+          <span style="--c:var(--vel)"><i class="dash"></i>Velocity</span>
+          <span style="--c:var(--accent)"><i class="dot"></i>Operating point</span>
+        </div>
+      </div>
+      <div class="chart-scroll"><svg class="chart fric" id="d-chart" viewBox="0 0 880 520" role="img" aria-label="Duct friction chart: airflow against friction rate, with duct-diameter and velocity lines and the operating point"></svg></div>
+    </section>
+    <section class="method">
+      <div><h3>How the inputs work</h3><p>Enter any two of airflow, size, velocity and friction rate. Typing in a calculated field makes it an input and releases the oldest one; click a tag to release or keep a value. Velocity plus friction plus airflow (or size) treats velocity and friction as maximums, and the stricter one governs.</p></div>
+      <div><h3>Friction</h3><p>Darcy–Weisbach, <code>Δp = f·(L/D)·ρV²/2</code>, with the Colebrook friction factor and the selected roughness. Galvanized steel at standard air is the basis of the ASHRAE friction chart and slide-rule duct calculators. Fitting losses are not included.</p></div>
+      <div><h3>Rectangular duct</h3><p>Height is held fixed and width is solved. Friction uses the Huebscher equivalent, <code>De = 1.30·(ab)^0.625 / (a+b)^0.25</code>; velocity uses the actual area. Aspect ratios above 4:1 are flagged.</p></div>
+      <div><h3>Actual air</h3><p>Density from dry-air ideal gas at the air temperature and the site pressure for the elevation above; viscosity from Sutherland's law. Airflow is then actual volume.</p></div>
+    </section>
+  </section>
+
+  <!-- ================= HVAC CALCULATIONS ================= -->
+  <section class="panel" id="tab-calcs" role="tabpanel" hidden>
+    <div class="hc-grid">
+      <section class="card" id="hc-sens" aria-label="Sensible air capacity">
+        <div class="hc-head"><h2>Sensible air capacity</h2><code class="formula" id="hc-sens-formula"></code></div>
+        <div class="hc-stats" id="hc-sens-stats" aria-live="polite"></div>
+        <div class="hc-fields" id="hc-sens-f"></div>
+        <div class="hc-factor">
+          <label for="hc-sens-k">Factor</label>
+          <input type="number" id="hc-sens-k" step="any" min="0" inputmode="decimal">
+          <span class="unit" id="hc-sens-ku"></span>
+          <button type="button" class="btn sm" id="hc-sens-std"></button>
+          <button type="button" class="btn sm" id="hc-sens-site"></button>
+        </div>
+        <p class="hc-eq" id="hc-sens-eq"></p>
+        <p class="err" id="hc-sens-err" hidden></p>
+        <div class="status"><p class="note">1.08 = 0.075 lb/ft³ × 0.24 Btu/lb·°F × 60 min/h, standard air at sea level.</p><button type="button" class="btn sm" data-reset="sens">Reset</button></div>
+      </section>
+
+      <section class="card" id="hc-water" aria-label="Water capacity">
+        <div class="hc-head"><h2>Water capacity</h2><code class="formula" id="hc-water-formula"></code></div>
+        <div class="hc-stats" id="hc-water-stats" aria-live="polite"></div>
+        <div class="hc-fields" id="hc-water-f"></div>
+        <div class="hc-factor">
+          <label for="hc-water-k">Factor</label>
+          <input type="number" id="hc-water-k" step="any" min="0" inputmode="decimal">
+          <span class="unit" id="hc-water-ku"></span>
+          <button type="button" class="btn sm" id="hc-water-std"></button>
+        </div>
+        <p class="hc-eq" id="hc-water-eq"></p>
+        <p class="err" id="hc-water-err" hidden></p>
+        <div class="status"><p class="note">500 = 8.33 lb/gal × 60 min/h × 1.0 Btu/lb·°F. Glycol solutions use a lower factor; enter it from the fluid's density and specific heat.</p><button type="button" class="btn sm" data-reset="water">Reset</button></div>
+      </section>
+
+      <section class="card" id="hc-ach" aria-label="Air changes per hour">
+        <div class="hc-head">
+          <h2>Air changes per hour</h2><code class="formula" id="hc-ach-formula"></code>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;flex-basis:100%">
+            <div class="seg" id="hc-ach-mode"><button type="button" data-v="dims">Room dimensions</button><button type="button" data-v="vol">Room volume</button></div>
+          </div>
+        </div>
+        <div class="hc-fields" id="hc-ach-f"></div>
+        <p class="hc-eq" id="hc-ach-eq"></p>
+        <p class="note" id="hc-ach-extra"></p>
+        <p class="err" id="hc-ach-err" hidden></p>
+        <div class="status"><p class="note">Airflow is the supply (or exhaust) rate through the room; volume is the room's net air volume.</p><button type="button" class="btn sm" data-reset="ach">Reset</button></div>
+      </section>
+    </div>
+    <section class="method">
+      <div><h3>How the inputs work</h3><p>Every field but one is an input. The calculated field is dashed. Typing into it makes it an input, and the field you edited least recently becomes the calculated one. Click a field's Input tag to calculate that field instead.</p></div>
+      <div><h3>Sensible factor</h3><p>1.08 assumes standard air. "Site elevation" scales it by barometric pressure at the elevation set above, holding 70 °F; at 5,000 ft it drops to about 0.90. For actual CFM at other temperatures, scale by 530 / (t + 460).</p></div>
+      <div><h3>SI units</h3><p>The same relations are used with converted units: 1.08 becomes about 1.207 W per L/s·K, 500 becomes about 4,181 W per L/s·K, and the air change constant becomes 3.6 (L/s to m³/h).</p></div>
+    </section>
+  </section>
+</div>
+
+<script>
+// ---- Psychrometric core (IP units internally; ASHRAE Handbook—Fundamentals 2017, Ch. 1) ----
+const Psy = (() => {
+  const R = 459.67;
+  // Saturation pressure over ice (<32 F) / liquid water (>=32 F), psia. Hyland-Wexler, ASHRAE eq. 5-6 (IP).
+  function pws(tF) {
+    const T = tF + R;
+    let ln;
+    if (tF < 32) {
+      ln = -1.0214165e4 / T - 4.8932428 - 5.3765794e-3 * T + 1.9202377e-7 * T * T
+        + 3.5575832e-10 * T ** 3 - 9.0344688e-14 * T ** 4 + 4.1635019 * Math.log(T);
+    } else {
+      ln = -1.0440397e4 / T - 1.129465e1 - 2.7022355e-2 * T + 1.289036e-5 * T * T
+        - 2.4780681e-9 * T ** 3 + 6.5459673 * Math.log(T);
+    }
+    return Math.exp(ln);
+  }
+  // Standard atmosphere, ASHRAE eq. 3 (IP): psia from elevation in ft
+  const pAlt = ft => 14.696 * Math.pow(1 - 6.8754e-6 * ft, 5.2559);
+  const Ws = (t, p) => { const e = pws(t); return 0.621945 * e / (p - e); };
+  // Humidity ratio from dry bulb + thermodynamic wet bulb, ASHRAE eq. 33 (water) / 35 (ice)
+  function W_dbwb(t, tw, p) {
+    const ws = Ws(tw, p);
+    if (tw >= 32) return ((1093 - 0.556 * tw) * ws - 0.240 * (t - tw)) / (1093 + 0.444 * t - tw);
+    return ((1220 - 0.04 * tw) * ws - 0.240 * (t - tw)) / (1220 + 0.444 * t - 0.48 * tw);
+  }
+  const h = (t, W) => 0.240 * t + W * (1061 + 0.444 * t);                 // Btu/lb_da
+  const v = (t, W, p) => 0.370486 * (t + R) * (1 + 1.607858 * W) / p;    // ft3/lb_da
+  const pw = (W, p) => p * W / (0.621945 + W);
+  function bisect(f, lo, hi, n = 80) {
+    let flo = f(lo);
+    for (let i = 0; i < n; i++) {
+      const mid = (lo + hi) / 2, fm = f(mid);
+      if ((fm > 0) === (flo > 0)) { lo = mid; flo = fm; } else hi = mid;
+    }
+    return (lo + hi) / 2;
+  }
+  const dew = (W, p) => { const e = pw(W, p); return W <= 0 ? NaN : bisect(t => pws(t) - e, -148, 250); };
+  const wb = (t, W, p) => bisect(tw => W_dbwb(t, tw, p) - W, -148, t);
+  const rh = (t, W, p) => pw(W, p) / pws(t);
+  function state(t, W, p) {
+    return { t, W, h: h(t, W), v: v(t, W, p), rh: rh(t, W, p), wb: wb(t, W, p), dp: dew(W, p) };
+  }
+  // streams: [{q, t, tw}] q in CFM. basis: 'actual' (CFM at stream state) or 'standard' (0.075 lb/ft3 moist air)
+  function mix(streams, p, basis) {
+    const S = streams.map(s => {
+      const W = W_dbwb(s.t, s.tw, p);
+      const st = state(s.t, W, p);
+      st.m = basis === 'standard' ? s.q * 0.075 / (1 + W) : s.q / st.v;   // lb_da/min
+      st.q = s.q;
+      return st;
+    });
+    const m = S.reduce((a, s) => a + s.m, 0);
+    const Wm = S.reduce((a, s) => a + s.m * s.W, 0) / m;
+    const hm = S.reduce((a, s) => a + s.m * s.h, 0) / m;
+    let tm = (hm - 1061 * Wm) / (0.240 + 0.444 * Wm);
+    const tLine = tm;
+    let fog = null, Wv = Wm;
+    if (Wm > Ws(tm, p)) {
+      // Supersaturated: mixture fogs. Equilibrium = saturated air + entrained liquid at the same temperature.
+      tm = bisect(t => h(t, Ws(t, p)) + (Wm - Ws(t, p)) * (t - 32) - hm, tm - 5, tm + 40);
+      Wv = Ws(tm, p);
+      fog = { liquid: Wm - Wv };
+    }
+    const M = state(tm, Wv, p);
+    M.h = hm; M.m = m; M.fog = fog; M.Wtotal = Wm; M.tLine = tLine;
+    M.qActual = m * M.v;
+    M.qStd = m * (1 + Wv) / 0.075;
+    const qSum = streams.reduce((a, s) => a + s.q, 0);
+    M.tSimple = streams.reduce((a, s) => a + s.q * s.t, 0) / qSum;
+    M.qSum = qSum;
+    return { streams: S, mix: M };
+  }
+
+  // ---- Any-two-inputs solver ----
+  // Variables: DB, WB, DP (°F), RH (fraction), W (lb/lb), h (Btu/lb IP, or kJ/kg SI when si=true), v (ft3/lb)
+  const hSI = (t, W) => { const c = (t - 32) / 1.8; return 1.006 * c + W * (2501 + 1.86 * c); };
+  const DEPENDENT = [['DP', 'W'], ['WB', 'h']];
+  function props(t, W, p, si) {
+    const st = state(t, W, p);
+    const e = pw(W, p), ws = Ws(t, p);
+    return { DB: t, WB: st.wb, DP: st.dp, RH: st.rh, W, h: si ? hSI(t, W) : st.h, hIP: st.h, hSI: hSI(t, W), v: st.v,
+      pw: e, Ws: ws, mu: W / ws, rho: (1 + W) / st.v };
+  }
+  function solve(inp, p, si) {
+    const keys = Object.keys(inp);
+    if (keys.length !== 2) return { error: 'Enter two values.' };
+    if (DEPENDENT.some(([a, b]) => keys.includes(a) && keys.includes(b)))
+      return { error: keys.includes('DP') ? 'Dew point and humidity ratio describe the same thing. Pick one of them plus another property.' : 'Wet bulb and enthalpy are nearly parallel on the chart, so together they do not fix a state. Pick another pair.' };
+    const G = {
+      DB: (t, W) => t, WB: (t, W) => wb(t, W, p), DP: (t, W) => dew(W, p), RH: (t, W) => rh(t, W, p),
+      W: (t, W) => W, h: (t, W) => si ? hSI(t, W) : h(t, W), v: (t, W) => v(t, W, p),
+    };
+    // humidity ratio at temperature t implied by one variable (closed form)
+    const Wat = (k, x, t) => {
+      switch (k) {
+        case 'W': return x;
+        case 'DP': return Ws(x, p);
+        case 'WB': return t >= x ? W_dbwb(t, x, p) : NaN;
+        case 'RH': { const e = x * pws(t); return 0.621945 * e / (p - e); }
+        case 'h': if (si) { const c = (t - 32) / 1.8; return (x - 1.006 * c) / (2501 + 1.86 * c); } return (x - 0.240 * t) / (1061 + 0.444 * t);
+        case 'v': return (x * p / (0.370486 * (t + R)) - 1) / 1.607858;
+      }
+    };
+    const okW = (t, W) => Number.isFinite(W) && W >= -1e-9 && W <= Ws(t, p) * (1 + 1e-6);
+    let t, W;
+    const [k1, k2] = keys.includes('DB') ? ['DB', keys.find(k => k !== 'DB')] : keys;
+    if (k1 === 'DB') {
+      t = inp.DB; W = Wat(k2, inp[k2], t);
+    } else {
+      // scan temperature for the root of the second variable's residual
+      const a = ['W', 'DP'].includes(k2) ? k2 : k1, b = a === k1 ? k2 : k1;
+      const res = tt => { const w = Wat(a, inp[a], tt); return okW(tt, w) ? G[b](tt, w) - inp[b] : NaN; };
+      let prev = null, lo = null, hi = null;
+      // start exactly on the saturation boundary when the first variable fixes it, so saturated states are found
+      const t0 = a === 'W' ? dew(inp.W, p) : a === 'DP' ? inp.DP : a === 'WB' ? inp.WB : -100;
+      if (Number.isFinite(t0)) {
+        const r0 = res(t0);
+        if (Number.isFinite(r0)) { if (Math.abs(r0) < 1e-7 * (1 + Math.abs(inp[b]))) { lo = hi = t0; } else prev = { t: t0, r: r0 }; }
+      }
+      for (let tt = Math.ceil(Math.max(-100, Number.isFinite(t0) ? t0 : -100) * 4) / 4; lo == null && tt <= 250; tt += 0.25) {
+        const r = res(tt);
+        if (!Number.isFinite(r)) { prev = null; continue; }
+        if (r === 0) { lo = hi = tt; break; }
+        if (prev && Math.sign(r) !== Math.sign(prev.r)) { lo = prev.t; hi = tt; break; }
+        prev = { t: tt, r };
+      }
+      if (lo == null) return { error: 'No air state matches those two values. Check that the combination is below saturation.' };
+      if (lo !== hi) {
+        let rlo = res(lo);
+        for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2, rm = res(mid); if (!Number.isFinite(rm)) break; if (Math.sign(rm) === Math.sign(rlo)) { lo = mid; rlo = rm; } else hi = mid; }
+      }
+      t = (lo + hi) / 2; W = Wat(a, inp[a], t);
+    }
+    if (!Number.isFinite(W) || W < -1e-9) return { error: 'That combination is drier than bone-dry air (humidity ratio below zero).' };
+    if (W > Ws(t, p) * (1 + 1e-6)) return { error: 'That combination is above saturation (over 100% RH).' };
+    W = Math.max(0, W);
+    return { t, W, P: props(t, W, p, si) };
+  }
+
+  // ---- Cooling coil: entering {t, W (total), h (total), m lb_da/min} → leaving DB/WB ----
+  function coil(ent, t2, tw2, p) {
+    const t1 = ent.t, W1 = ent.W, h1 = ent.h, m = ent.m;
+    const W2 = W_dbwb(t2, tw2, p), h2 = h(t2, W2);
+    const dW = W1 - W2, wet = dW > 0;
+    const hw = t2 - 32;                                    // condensate enthalpy, leaves near leaving air temp
+    const qT = m * ((h1 - h2) - (wet ? dW * hw : 0));      // Btu/min
+    const qS = m * (h(t1, W1) - h(t2, W1));                // sensible: cool at constant W
+    const qL = qT - qS;
+    let adp = null, bf = null;
+    if (wet && t2 < t1) {
+      const T = s => t1 + s * (t2 - t1), Wl = s => W1 + s * (W2 - W1), f = s => Wl(s) - Ws(T(s), p);
+      let lo = 1, hi = null;
+      for (let s = 1; s < 200; s += 0.25) { if (T(s) < -100 || Wl(s) < 0) break; if (f(s) >= 0) { hi = s; break; } lo = s; }
+      if (hi != null) {
+        for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (f(mid) >= 0) hi = mid; else lo = mid; }
+        adp = { t: T(hi), W: Wl(hi) };
+        bf = (t2 - adp.t) / (t1 - adp.t);
+      }
+    }
+    return { ...state(t2, W2, p), W2, h2, dW, wet, cond: wet ? m * dW : 0, qT, qS, qL, shr: qT !== 0 ? qS / qT : NaN, adp, bf, m };
+  }
+  return { coil, pws, pAlt, Ws, W_dbwb, h, hSI, v, pw, dew, wb, rh, state, mix, props, solve, DEPENDENT };
+})();
+
+</script>
+<script>
+// ---- Duct friction engine (IP units internally; ASHRAE Handbook—Fundamentals, Ch. 21) ----
+// Q in CFM, V in fpm, D/a/b in inches, friction rate in in. w.g. per 100 ft,
+// roughness eps in ft, density rho in lb/ft3, viscosity mu in lb/(ft·s).
+const Duct = (() => {
+  const INWG = 5.1972;              // lbf/ft2 per in. w.g. (248.84 Pa, water at 60 F)
+  const GC = 32.174;
+  // Air properties: dry air ideal gas, standard atmosphere pressure, Sutherland viscosity
+  function air(tF, elevFt) {
+    const p = 14.696 * Math.pow(1 - 6.8754e-6 * elevFt, 5.2559);       // psia
+    const T = tF + 459.67;                                               // R
+    const rho = p * 144 / (53.352 * T);                                  // lb/ft3
+    const TK = T / 1.8;
+    const muSI = 1.716e-5 * Math.pow(TK / 273.15, 1.5) * (273.15 + 110.4) / (TK + 110.4); // Pa·s
+    return { rho, mu: muSI * 0.6719690, p };
+  }
+  const STD = { rho: 0.075, mu: 1.2215e-5 };      // standard air, 70 F, sea level
+
+  const areaRound = D => Math.PI * D * D / 4 / 144;                       // ft2
+  const deRect = (a, b) => 1.30 * Math.pow(a * b, 0.625) / Math.pow(a + b, 0.25);  // Huebscher
+  const pv = (V, rho) => rho * (V / 60) ** 2 / (2 * GC * INWG);          // in. w.g.
+
+  function frictionFactor(Re, relRough) {
+    if (Re < 2300) return 64 / Re;
+    // Swamee-Jain start, then Colebrook fixed-point
+    let f = 0.25 / Math.log10(relRough / 3.7 + 5.74 / Re ** 0.9) ** 2;
+    for (let i = 0; i < 50; i++) {
+      const fn = 1 / (-2 * Math.log10(relRough / 3.7 + 2.51 / (Re * Math.sqrt(f)))) ** 2;
+      if (Math.abs(fn - f) < 1e-12) { f = fn; break; }
+      f = fn;
+    }
+    return f;
+  }
+  // Round duct (or equal-friction equivalent) of diameter D carrying Q
+  function round(Q, D, eps, air) {
+    const A = areaRound(D), V = Q / A;
+    const Dft = D / 12;
+    const Re = air.rho * (V / 60) * Dft / air.mu;
+    const f = frictionFactor(Re, eps / Dft);
+    const Pv = pv(V, air.rho);
+    return { V, A, Re, f, Pv, fr: f * (100 / Dft) * Pv };
+  }
+  // Generic section: {shape:'round', D} or {shape:'rect', a, b}
+  function section(sec) {
+    if (sec.shape === 'round') return { De: sec.D, A: areaRound(sec.D), Dh: sec.D };
+    const A = sec.a * sec.b / 144;
+    return { De: deRect(sec.a, sec.b), A, Dh: 2 * sec.a * sec.b / (sec.a + sec.b), aspect: Math.max(sec.a, sec.b) / Math.min(sec.a, sec.b) };
+  }
+  // Check a duct at a flow
+  function check(sec, Q, eps, air) {
+    const s = section(sec);
+    const r = round(Q, s.De, eps, air);      // friction from equal-friction diameter
+    const V = Q / s.A;                       // actual velocity from actual area
+    return { ...s, V, Pv: pv(V, air.rho), fr: r.fr, Re: r.Re, f: r.f };
+  }
+  function bisectLog(fn, lo, hi, n = 100) {   // fn increasing, root of fn(x)=0 on log scale
+    for (let i = 0; i < n; i++) {
+      const mid = Math.sqrt(lo * hi);
+      if (fn(mid) > 0) hi = mid; else lo = mid;
+    }
+    return Math.sqrt(lo * hi);
+  }
+  // Round diameter giving friction rate fr at flow Q
+  const dForFriction = (Q, fr, eps, air) => bisectLog(D => fr - round(Q, D, eps, air).fr, 0.05, 2000);
+  const dForVelocity = (Q, V) => Math.sqrt(4 * Q * 144 / (Math.PI * V));
+  // Max flow in a section at friction rate fr
+  const qForFriction = (sec, fr, eps, air) => bisectLog(Q => check(sec, Q, eps, air).fr - fr, 1e-3, 1e8);
+  const qForVelocity = (sec, V) => V * section(sec).A;
+
+  // Capacity with optional limits {fr, V}: governing = smaller flow
+  function capacity(sec, lim, eps, air) {
+    const out = {};
+    if (lim.fr > 0) out.qFr = qForFriction(sec, lim.fr, eps, air);
+    if (lim.V > 0) out.qV = qForVelocity(sec, lim.V);
+    const cands = [['friction', out.qFr], ['velocity', out.qV]].filter(c => c[1] > 0);
+    const g = cands.reduce((a, c) => (c[1] < a[1] ? c : a));
+    out.Q = g[1]; out.governs = g[0];
+    out.at = check(sec, out.Q, eps, air);
+    return out;
+  }
+  // Required round diameter with optional limits: governing = larger diameter
+  function sizeRound(Q, lim, eps, air) {
+    const out = {};
+    if (lim.fr > 0) out.dFr = dForFriction(Q, lim.fr, eps, air);
+    if (lim.V > 0) out.dV = dForVelocity(Q, lim.V);
+    const cands = [['friction', out.dFr], ['velocity', out.dV]].filter(c => c[1] > 0);
+    const g = cands.reduce((a, c) => (c[1] > a[1] ? c : a));
+    out.D = g[1]; out.governs = g[0];
+    return out;
+  }
+  const ok = (sec, Q, lim, eps, air) => {
+    const c = check(sec, Q, eps, air);
+    return (!(lim.fr > 0) || c.fr <= lim.fr * (1 + 1e-9)) && (!(lim.V > 0) || c.V <= lim.V * (1 + 1e-9));
+  };
+  // Smallest standard round that satisfies limits
+  function pickRound(Q, lim, eps, air, sizes) {
+    for (const D of sizes) if (ok({ shape: 'round', D }, Q, lim, eps, air)) return D;
+    return null;
+  }
+  // For each side h (from list), smallest b from list satisfying limits
+  function rectTable(Q, lim, eps, air, sides) {
+    const rows = [];
+    for (const h of sides) {
+      const b = sides.find(w => w >= h && ok({ shape: 'rect', a: w, b: h }, Q, lim, eps, air));
+      if (b == null) continue;
+      if (b / h > 10) continue;     // skip absurd aspect ratios
+      rows.push({ h, w: b, ...check({ shape: 'rect', a: b, b: h }, Q, eps, air) });
+      if (b === h) break;           // square reached: further rows are mirror images
+    }
+    return rows;
+  }
+  // ---- Adaptive solver ----
+  // pins: subset of ['Q','S','V','fr']. Valid: any 2, or {V, fr} plus one of Q/S (then V and fr are maximums).
+  // shape 'round' -> size param x = D; 'rect' -> x = width, H fixed.
+  const secOf = (shape, x, H) => shape === 'round' ? { shape: 'round', D: x } : { shape: 'rect', a: x, b: H };
+  function solve(p) {
+    const { shape, H, pins, eps, air } = p, has = k => pins.includes(k);
+    const A = x => section(secOf(shape, x, H)).A;
+    const frAt = (x, Q) => check(secOf(shape, x, H), Q, eps, air).fr;
+    let x, Q, gov = null, xF, xV, qF, qV;
+    if (has('S')) {
+      x = p.x;
+      const sec = secOf(shape, x, H);
+      if (has('Q')) Q = p.Q;
+      else {
+        qF = has('fr') ? qForFriction(sec, p.fr, eps, air) : Infinity;
+        qV = has('V') ? p.V * A(x) : Infinity;
+        Q = Math.min(qF, qV);
+        if (has('fr') && has('V')) gov = qF <= qV ? 'friction' : 'velocity';
+      }
+    } else if (has('Q')) {
+      Q = p.Q;
+      xF = has('fr') ? bisectLog(x => p.fr - frAt(x, Q), 0.01, 1e5) : 0;
+      xV = has('V') ? (shape === 'round' ? Math.sqrt(4 * Q * 144 / (Math.PI * p.V)) : Q / p.V * 144 / H) : 0;
+      x = Math.max(xF, xV);
+      if (has('fr') && has('V')) gov = xF >= xV ? 'friction' : 'velocity';
+    } else {                                   // velocity + friction -> size and flow
+      x = bisectLog(x => p.fr - frAt(x, p.V * A(x)), 0.01, 1e5);
+      Q = p.V * A(x);
+    }
+    const sec = secOf(shape, x, H);
+    return { x, Q, sec, gov, xF, xV, qF, qV, c: check(sec, Q, eps, air) };
+  }
+  // smallest standard size param meeting limits (as maximums) at flow Q
+  function pickStd(shape, H, Q, lim, eps, air, sizes) {
+    for (const x of sizes) if (ok(secOf(shape, x, H), Q, lim, eps, air)) return x;
+    return null;
+  }
+  // Smallest other side for a fixed side h
+  const rectFixed = (Q, lim, eps, air, h, sides) => {
+    const w = sides.find(w => ok({ shape: 'rect', a: w, b: h }, Q, lim, eps, air));
+    return w == null ? null : { h, w, ...check({ shape: 'rect', a: w, b: h }, Q, eps, air) };
+  };
+  return { solve, pickStd, secOf, rectFixed, air, STD, deRect, pv, frictionFactor, round, section, check, capacity, sizeRound, pickRound, rectTable, dForFriction, qForFriction, areaRound };
+})();
+
+</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const KEY = 'airside-toolkit-v1';
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const DEF = {
+    units: 'IP', elev: 0, tab: 'psych',
+    psy: { pins: ['DB', 'WB'], vals: { DB: 75, WB: 62.5 } },
+    mix: { basis: 'actual', coil: { t: 55, tw: 54 }, streams: [{ name: 'Outside air', q: 2000, t: 95, tw: 78 }, { name: 'Return air', q: 8000, t: 75, tw: 62.5 }] },
+    hvac: {
+      sens: { calc: 'Q', order: ['Q', 'cfm', 'dT'], k: 1.08, vals: { Q: 21600, cfm: 1000, dT: 20 } },
+      water: { calc: 'Q', order: ['Q', 'gpm', 'dT'], k: 500, vals: { Q: 120000, gpm: 24, dT: 10 } },
+      ach: { calc: 'ACH', order: ['ACH', 'V', 'cfm', 'L', 'W', 'H'], mode: 'dims', vals: { ACH: 6, V: 4000, cfm: 400, L: 20, W: 20, H: 10 } },
+    },
+    duct: { shape: 'round', mat: '0.0003', eps: 0.0003, airMode: 'std', tF: 70, pins: ['Q', 'fr'], Q: 1000, D: 14, W: 20, H: 10, V: 900, fr: 0.08, len: 100 },
+  };
+  let S = clone(DEF);
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && s.psy && s.mix && s.duct) S = { ...clone(DEF), ...s, psy: { ...DEF.psy, ...s.psy }, mix: { ...DEF.mix, ...s.mix, coil: { ...DEF.mix.coil, ...(s.mix.coil || {}) } }, duct: { ...DEF.duct, ...s.duct } };
+  } catch (e) {}
+  S.hvac = S.hvac || clone(DEF.hvac);
+  for (const n of ['sens', 'water', 'ach']) {
+    const d = clone(DEF.hvac[n]), c = S.hvac[n] || {}, keys = Object.keys(d.vals);
+    const h = { ...d, ...c, vals: { ...d.vals, ...(c.vals || {}) } }, ord = Array.isArray(h.order) ? h.order.filter(k => keys.includes(k)) : [];
+    h.order = [...keys.filter(k => !ord.includes(k)), ...ord];
+    S.hvac[n] = h;
+  }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+  const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : NaN;
+
+  // ======================= units (state is IP) =======================
+  const SI = () => S.units === 'SI';
+  const K = {
+    q:   { ipf: 1, sif: 0.4719474, ip: 'CFM', si: 'L/s', dip: 0, dsi: 0 },
+    d:   { ipf: 1, sif: 25.4, ip: 'in', si: 'mm', dip: 2, dsi: 0 },
+    v:   { ipf: 1, sif: 0.00508, ip: 'fpm', si: 'm/s', dip: 0, dsi: 2 },
+    p:   { ipf: 1, sif: 248.84, ip: 'in. w.g.', si: 'Pa', dip: 3, dsi: 1 },
+    len: { ipf: 1, sif: 0.3048, ip: 'ft', si: 'm', dip: 0, dsi: 1 },
+    z:   { ipf: 1, sif: 0.3048, ip: 'ft', si: 'm', dip: 0, dsi: 0 },
+    eps: { ipf: 1, sif: 304.8, ip: 'ft', si: 'mm', dip: 5, dsi: 3 },
+    fr:  { ipf: 1, sif: 248.84 / 30.48, ip: 'in. w.g./100 ft', si: 'Pa/m', dip: 3, dsi: 2 },
+    rho: { ipf: 1, sif: 16.01846, ip: 'lb/ft³', si: 'kg/m³', dip: 4, dsi: 3 },
+    a:   { ipf: 1, sif: 0.09290304, ip: 'ft²', si: 'm²', dip: 2, dsi: 3 },
+    W:   { ipf: 7000, sif: 1000, ip: 'gr/lb', si: 'g/kg', dip: 1, dsi: 2 },
+    Wd:  { ipf: 1, sif: 1, ip: 'lb/lb', si: 'kg/kg', dip: 5, dsi: 5 },
+    rh:  { ipf: 100, sif: 100, ip: '%', si: '%', dip: 1, dsi: 1 },
+    h:   { ipf: 1, sif: 1, ip: 'Btu/lb', si: 'kJ/kg', dip: 2, dsi: 2 },     // stored in the display system
+    vol: { ipf: 1, sif: 0.06242796, ip: 'ft³/lb', si: 'm³/kg', dip: 3, dsi: 4 },
+    pr:  { ipf: 1, sif: 6.894757, ip: 'psia', si: 'kPa', dip: 3, dsi: 2 },
+    pw:  { ipf: 1, sif: 6.894757, ip: 'psia', si: 'kPa', dip: 4, dsi: 3 },
+    m:   { ipf: 60, sif: 0.45359237 / 60, ip: 'lb/h', si: 'kg/s', dip: 0, dsi: 3 },
+    btuh: { ipf: 1, sif: 0.29307107, ip: 'Btu/h', si: 'W', dip: 0, dsi: 0 },
+    dt:   { ipf: 1, sif: 1 / 1.8, ip: '°F', si: 'K', dip: 1, dsi: 2 },
+    wq:   { ipf: 1, sif: 0.0630902, ip: 'gpm', si: 'L/s', dip: 2, dsi: 3 },
+    vol3: { ipf: 1, sif: 0.0283168466, ip: 'ft³', si: 'm³', dip: 0, dsi: 2 },
+    rl:   { ipf: 1, sif: 0.3048, ip: 'ft', si: 'm', dip: 1, dsi: 2 },
+    ach:  { ipf: 1, sif: 1, ip: 'ACH', si: 'ACH', dip: 2, dsi: 2 },
+    area: { ipf: 1, sif: 0.09290304, ip: 'ft²', si: 'm²', dip: 0, dsi: 1 },
+    mh:  { ipf: 60, sif: 0.45359237 * 60, ip: 'lb/h', si: 'kg/h', dip: 1, dsi: 1 },        // from lb/min
+    gph: { ipf: 60 / 8.34, sif: 0.45359237 * 60, ip: 'gph', si: 'L/h', dip: 2, dsi: 1 },  // from lb/min of water
+    gpm: { ipf: 1 / 8.34, sif: 0.45359237, ip: 'gpm', si: 'L/min', dip: 3, dsi: 2 },
+    ld:  { ipf: 60, sif: 60 * 0.00029307107, ip: 'Btu/h', si: 'kW', dip: 0, dsi: 2 },     // from Btu/min
+  };
+  const out = (k, x) => k === 't' ? (SI() ? (x - 32) / 1.8 : x) : x * (SI() ? K[k].sif : K[k].ipf);
+  const inn = (k, x) => k === 't' ? (SI() ? x * 1.8 + 32 : x) : x / (SI() ? K[k].sif : K[k].ipf);
+  const U = k => k === 't' ? (SI() ? '°C' : '°F') : SI() ? K[k].si : K[k].ip;
+  const dp = k => k === 't' ? 1 : SI() ? K[k].dsi : K[k].dip;
+  const fx = (x, d) => Number.isFinite(x) ? x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
+  const show = (k, x, d) => fx(out(k, x), d ?? dp(k));
+  const val = (k, x, d) => `${show(k, x, d)}<small>${U(k)}</small>`;
+  const inVal = (k, x) => Number.isFinite(x) ? String(+out(k, x).toFixed(dp(k))) : '';
+  const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const P = () => Psy.pAlt(S.elev);
+
+  // ======================= psychrometric chart =======================
+  function psyChart(svg, cfg) {
+    const p = P(), si = SI();
+    const W0 = 900, H0 = 580, m = { l: 16, r: 74, t: 14, b: 46 };
+    const pw = W0 - m.l - m.r, ph = H0 - m.t - m.b;
+    let xLo = si ? -10 : 20, xHi = si ? 50 : 120, yHi = si ? 30 : 200;
+    for (const q of cfg.points) {
+      if (!Number.isFinite(q.t) || !Number.isFinite(q.W)) continue;
+      xLo = Math.min(xLo, out('t', q.t) - 6); xHi = Math.max(xHi, out('t', q.t) + 6); yHi = Math.max(yHi, out('W', q.W) * 1.15);
+    }
+    const xs = si ? 5 : 10, xg = si ? 2.5 : 5, ys = si ? 2 : 20, yg = si ? 1 : 10;
+    xLo = Math.floor(xLo / xs) * xs; xHi = Math.ceil(xHi / xs) * xs; yHi = Math.ceil(yHi / ys) * ys;
+    const tF = xd => si ? xd * 1.8 + 32 : xd;
+    const X = t => m.l + (out('t', t) - xLo) / (xHi - xLo) * pw;
+    const Y = W => m.t + ph - out('W', W) / yHi * ph;
+    const Wtop = inn('W', yHi), tA = tF(xLo), tB = tF(xHi);
+    const P2 = (t, W) => X(t).toFixed(1) + ',' + Y(W).toFixed(1);
+    const id = svg.id;
+    const inPlot = (x, y) => x >= m.l - 0.5 && x <= m.l + pw + 0.5 && y >= m.t - 0.5 && y <= m.t + ph + 0.5;
+    // saturation curve (clipped at top)
+    const sat = []; let tTop = null;
+    const N = 180;
+    for (let i = 0; i <= N; i++) {
+      const t = tA + (tB - tA) * i / N, w = Psy.Ws(t, p);
+      if (w > Wtop) {
+        let lo = i ? tA + (tB - tA) * (i - 1) / N : tA, hi = t;
+        for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (Psy.Ws(mid, p) > Wtop) hi = mid; else lo = mid; }
+        tTop = lo; sat.push([tTop, Wtop]); break;
+      }
+      sat.push([t, w]);
+    }
+    const satD = 'M' + sat.map(([t, w]) => P2(t, w)).join('L');
+    const under = `M${P2(tA, 0)}L${satD.slice(1)}${tTop != null ? `L${(m.l + pw).toFixed(1)},${m.t}` : ''}L${P2(tB, 0)}Z`;
+    let s = `<defs><clipPath id="${id}-u"><path d="${under}"/></clipPath><clipPath id="${id}-r"><rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+    s += `<rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="var(--bg)"/><path d="${under}" fill="var(--surface)"/>`;
+    const CU = `clip-path="url(#${id}-u)"`, CR = `clip-path="url(#${id}-r)"`;
+    let g = '', lab = '';
+    // dry bulb + humidity ratio grid
+    for (let x = xLo; x <= xHi + 1e-9; x += xg) {
+      const major = Math.abs(x / xs - Math.round(x / xs)) < 1e-9;
+      g += `<line x1="${X(tF(x))}" x2="${X(tF(x))}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--grid)" stroke-width="${major ? 1.2 : 0.8}" ${CU}/>`;
+      if (major) lab += `<text x="${X(tF(x))}" y="${m.t + ph + 16}" text-anchor="middle" font-size="11" fill="var(--muted)">${+x.toFixed(2)}</text>`;
+    }
+    for (let y = 0; y <= yHi + 1e-9; y += yg) {
+      const major = Math.abs(y / ys - Math.round(y / ys)) < 1e-9;
+      g += `<line x1="${m.l}" x2="${m.l + pw}" y1="${Y(inn('W', y))}" y2="${Y(inn('W', y))}" stroke="var(--grid)" stroke-width="${major ? 1.2 : 0.8}" ${CU}/>`;
+      if (major) lab += `<text x="${m.l + pw + 7}" y="${Y(inn('W', y)) + 4}" font-size="11" fill="var(--muted)">${+y.toFixed(2)}</text>`;
+    }
+    // specific volume lines
+    const vAt = (t, W) => Psy.v(t, W, p);
+    const vMin = vAt(tA, 0), vMax = vAt(tB, Math.min(Psy.Ws(tB, p), Wtop));
+    const vStepIP = 0.5, vStepSI = 0.02;
+    const vStep = si ? vStepSI / K.vol.sif : vStepIP;
+    for (let vd = Math.ceil(out('vol', vMin) / (si ? vStepSI : vStepIP)) * (si ? vStepSI : vStepIP); inn('vol', vd) <= vMax; vd += si ? vStepSI : vStepIP) {
+      const vv = inn('vol', vd), t0 = vv * p / 0.370486 - 459.67;
+      const Wv = t => (vv * p / (0.370486 * (t + 459.67)) - 1) / 1.607858;
+      let lo = tA - 80, hi = t0;
+      for (let k = 0; k < 50; k++) { const mid = (lo + hi) / 2; if (Wv(mid) > Psy.Ws(mid, p)) lo = mid; else hi = mid; }
+      let d = '';
+      for (let i = 0; i <= 8; i++) { const t = t0 + (hi - t0) * i / 8; d += (i ? 'L' : 'M') + P2(t, Wv(t)); }
+      g += `<path d="${d}" fill="none" stroke="var(--c-v)" stroke-width="0.9" ${CU}/>`;
+      if (X(t0) > m.l + 20 && X(t0) < m.l + pw - 4) lab += `<text x="${X(t0) - 3}" y="${Y(0) - 5}" text-anchor="end" font-size="9.5" fill="var(--c-v)">${vd.toFixed(si ? 2 : 1)}</text>`;
+    }
+    // wet bulb lines
+    const wbStep = si ? 2.5 : 5;
+    for (let wd = Math.ceil(out('t', tA) / wbStep) * wbStep; wd <= out('t', tB) + 1e-9; wd += wbStep) {
+      const tw = tF(wd), ws = Psy.Ws(tw, p);
+      if (ws > Wtop) break;
+      const t0 = tw + (tw >= 32 ? (1093 - 0.556 * tw) : (1220 - 0.04 * tw)) * ws / 0.240;
+      let d = '';
+      for (let i = 0; i <= 6; i++) { const t = tw + (t0 - tw) * i / 6; d += (i ? 'L' : 'M') + P2(t, Math.max(0, Psy.W_dbwb(t, tw, p))); }
+      g += `<path d="${d}" fill="none" stroke="var(--c-wb)" stroke-width="0.8" stroke-dasharray="4 3" ${CU}/>`;
+    }
+    // enthalpy lines with a scale beyond saturation
+    const hFn = (t, W) => si ? Psy.hSI(t, W) : Psy.h(t, W);
+    const Wh = (hv, t) => { if (si) { const c = (t - 32) / 1.8; return (hv - 1.006 * c) / (2501 + 1.86 * c); } return (hv - 0.240 * t) / (1061 + 0.444 * t); };
+    const hStep = si ? 10 : 5;
+    const hLo = hFn(tA, 0), hHi = hFn(tB, Math.min(Wtop, Psy.Ws(tB, p)));
+    let hLabelled = 0;
+    for (let hv = Math.ceil(hLo / hStep) * hStep; hv <= hHi; hv += hStep) {
+      const t0 = si ? (hv / 1.006) * 1.8 + 32 : hv / 0.240;
+      let lo = tA - 120, hi = t0;
+      for (let k = 0; k < 50; k++) { const mid = (lo + hi) / 2; if (Wh(hv, mid) > Psy.Ws(mid, p)) lo = mid; else hi = mid; }
+      const ts = hi, Ws_ = Psy.Ws(ts, p);
+      let d = '';
+      for (let i = 0; i <= 6; i++) { const t = ts + (t0 - ts) * i / 6; d += (i ? 'L' : 'M') + P2(t, Math.max(0, Wh(hv, t))); }
+      g += `<path d="${d}" fill="none" stroke="var(--c-h)" stroke-width="0.8" ${CU}/>`;
+      const sx = X(ts), sy = Y(Ws_);
+      if (inPlot(sx, sy) && sy > m.t + 10 && sx > m.l + 30) {
+        const bx = X(t0), by = Y(0), L = Math.hypot(sx - bx, sy - by), ux = (sx - bx) / L, uy = (sy - by) / L;
+        const ex = sx + ux * 24, ey = sy + uy * 24;
+        if (ex > m.l + 4 && ey > m.t + 4) {
+          g += `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="var(--c-h)" stroke-width="0.8" opacity=".8"/>`;
+          lab += `<text x="${ex + ux * 3}" y="${ey + uy * 3 + 3}" text-anchor="end" font-size="9.5" fill="var(--c-h)">${hv}</text>`;
+          hLabelled++;
+        }
+      }
+    }
+    // relative humidity curves
+    for (const r of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]) {
+      let d = '';
+      for (let i = 0; i <= 90; i++) { const t = tA + (tB - tA) * i / 90, e = r * Psy.pws(t), w = 0.621945 * e / (p - e); d += (i ? 'L' : 'M') + P2(t, w); }
+      g += `<path d="${d}" fill="none" stroke="var(--c-rh)" stroke-width="1" ${CR}/>`;
+      // label where the curve leaves the top or at the right edge
+      let tl = tB; const wR = 0.621945 * r * Psy.pws(tB) / (p - r * Psy.pws(tB));
+      if (wR > Wtop) { let lo = tA, hi = tB; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2, e = r * Psy.pws(mid); (0.621945 * e / (p - e) > Wtop ? hi = mid : lo = mid); } tl = lo - (tB - tA) * 0.014; }
+      const e = r * Psy.pws(tl), lx = X(tl), ly = Y(0.621945 * e / (p - e));
+      if (lx > m.l + 40) lab += `<text x="${lx - 3}" y="${ly + 12}" text-anchor="end" font-size="10" fill="var(--muted)">${Math.round(r * 100)}%</text>`;
+    }
+    // saturation curve + temperature scale on it
+    g += `<path d="${satD}" fill="none" stroke="var(--c-sat)" stroke-width="1.8"/>`;
+    for (let x = Math.ceil(xLo / xs) * xs; x <= xHi; x += xs) {
+      const t = tF(x), w = Psy.Ws(t, p); if (w > Wtop) break;
+      const sx = X(t), sy = Y(w);
+      if (sx > m.l + 14) {
+        g += `<circle cx="${sx}" cy="${sy}" r="1.8" fill="var(--c-sat)"/>`;
+        lab += `<text x="${sx - 5}" y="${sy - 4}" text-anchor="end" font-size="10" fill="var(--c-sat)">${x}</text>`;
+      }
+    }
+    // captions
+    lab += `<text x="${m.l + 10}" y="${m.t + 18}" font-size="10.5" fill="var(--c-h)">Enthalpy, ${U('h')} dry air</text>`;
+    lab += `<text x="${m.l + 10}" y="${m.t + 33}" font-size="10.5" fill="var(--c-sat)">Saturation (wet bulb / dew point), ${U('t')}</text>`;
+    lab += `<text x="${m.l + 10}" y="${m.t + 48}" font-size="10.5" fill="var(--c-v)">Specific volume, ${U('vol')} (along bottom)</text>`;
+    lab += `<text x="${m.l + pw / 2}" y="${H0 - 8}" text-anchor="middle" font-size="12" fill="var(--muted)">Dry bulb, ${U('t')}</text>`;
+    lab += `<text transform="translate(${W0 - 10},${m.t + ph / 2}) rotate(90)" text-anchor="middle" font-size="12" fill="var(--muted)">Humidity ratio, ${U('W')} dry air</text>`;
+
+    // ---- overlays ----
+    let ov = '';
+    const placed = [];
+    const tag = (x, y, text, anchor, col) => {
+      const w = text.length * 6.4 + 8, h = 15;
+      let rx = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x;
+      rx = Math.max(2, Math.min(W0 - w - 2, rx));
+      let ry = Math.max(2, Math.min(H0 - h - 2, y - 11));
+      const hit = (bx, by) => placed.some(b => bx < b.x + b.w + 3 && bx + w + 3 > b.x && by < b.y + b.h + 2 && by + h + 2 > b.y);
+      for (let i = 0; i < 12 && hit(rx, ry); i++) ry = ry - 18 >= 2 ? ry - 18 : ry + 18 * (i + 1);
+      placed.push({ x: rx, y: ry, w, h });
+      return `<rect x="${rx}" y="${ry}" width="${w}" height="${h}" rx="3" fill="var(--surface)" stroke="${col}" stroke-width="1"/><text x="${rx + w / 2}" y="${ry + 11}" text-anchor="middle" font-size="10.5" font-weight="500" fill="${col}">${text}</text>`;
+    };
+    for (const sg of cfg.segs || []) {
+      ov += `<line x1="${X(sg.a.t)}" y1="${Y(sg.a.W)}" x2="${X(sg.b.t)}" y2="${Y(sg.b.W)}" stroke="${sg.col}" stroke-width="1.6" ${sg.dash ? 'stroke-dasharray="6 4"' : ''} ${CR}/>`;
+    }
+    let tags = '';
+    for (const q of cfg.points) {
+      if (!Number.isFinite(q.t) || !Number.isFinite(q.W)) continue;
+      const col = q.col || 'var(--accent)', px = X(q.t), py = Y(q.W);
+      if (q.full) {
+        const pr = Psy.props(q.t, q.W, p, si);
+        const G = `stroke="${col}" stroke-width="1.3" fill="none" opacity=".85"`;
+        // dry bulb
+        ov += `<line x1="${px}" y1="${py}" x2="${px}" y2="${Y(0)}" ${G} stroke-dasharray="3 3"/>`;
+        tags += tag(px, Y(0) - 8, `DB ${show('t', q.t)}`, 'middle', col);
+        // humidity ratio: from dew point on saturation to the right axis
+        ov += `<line x1="${X(pr.DP)}" y1="${py}" x2="${m.l + pw}" y2="${py}" ${G} stroke-dasharray="3 3" ${CR}/>`;
+        tags += tag(m.l + pw + 3, py + 4, `${show('W', q.W)}`, 'start', col);
+        if (X(pr.DP) > m.l + 2) tags += tag(X(pr.DP) - 6, py + 4, `DP ${show('t', pr.DP)}`, 'end', col);
+        // relative humidity curve through the point
+        if (pr.RH > 0.005) {
+          let d = ''; for (let i = 0; i <= 60; i++) { const t = tA + (tB - tA) * i / 60, e = pr.RH * Psy.pws(t); d += (i ? 'L' : 'M') + P2(t, 0.621945 * e / (p - e)); }
+          ov += `<path d="${d}" stroke="${col}" stroke-width="1" fill="none" opacity=".35" ${CR}/>`;
+        }
+        // wet bulb line to saturation
+        let d = ''; for (let i = 0; i <= 8; i++) { const t = q.t + (pr.WB - q.t) * i / 8; d += (i ? 'L' : 'M') + P2(t, Math.max(0, Psy.W_dbwb(t, pr.WB, p))); }
+        ov += `<path d="${d}" ${G} stroke-dasharray="5 3"/>`;
+        const wx = X(pr.WB), wy = Y(Psy.Ws(pr.WB, p));
+        if (inPlot(wx, wy)) tags += tag(wx + 6, wy - 8, `WB ${show('t', pr.WB)}`, 'start', col);
+        // enthalpy: point → saturation → scale
+        const hv = pr.h, t0h = si ? (hv / 1.006) * 1.8 + 32 : hv / 0.240;
+        let lo = tA - 120, hi = q.t; for (let k = 0; k < 50; k++) { const mid = (lo + hi) / 2; if (Wh(hv, mid) > Psy.Ws(mid, p)) lo = mid; else hi = mid; }
+        const sx = X(hi), sy = Y(Psy.Ws(hi, p)), bx = X(t0h), by = Y(0), L = Math.hypot(sx - bx, sy - by), ux = (sx - bx) / L, uy = (sy - by) / L;
+        const ex = sx + ux * 30, ey = sy + uy * 30;
+        ov += `<path d="M${px},${py}L${sx},${sy}L${ex},${ey}" ${G}/>`;
+        if (inPlot(ex, ey)) tags += tag(ex - 2, ey - 2, `h ${show('h', hv)}`, 'end', col);
+        // specific volume through the point, down to the bottom
+        const t0v = pr.v * p / 0.370486 - 459.67;
+        ov += `<line x1="${px}" y1="${py}" x2="${X(t0v)}" y2="${Y(0)}" ${G} stroke-dasharray="1.5 2.5" ${CR}/>`;
+        if (X(t0v) < m.l + pw - 30) tags += tag(X(t0v) + 4, Y(0) - 26, `v ${show('vol', pr.v)}`, 'start', col);
+      }
+      ov += `<circle cx="${px}" cy="${py}" r="${q.full ? 6.5 : 6}" fill="${col}" stroke="var(--surface)" stroke-width="2"/>`;
+      if (q.label) ov += `<text x="${px + (q.lx ?? 0)}" y="${py + (q.ly ?? -12)}" text-anchor="middle" font-size="12" font-weight="600" fill="${col}">${q.label}</text>`;
+    }
+    s += g + `<rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="none" stroke="var(--line)"/>` + lab + ov + tags;
+    svg.innerHTML = s;
+    svg._map = { m, pw, ph, xLo, xHi, yHi, tF, p };
+    if (!svg._wired) {
+      svg._wired = true;
+      const toState = e => {
+        const M = svg._map; if (!M) return null;
+        const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+        const ctm = svg.getScreenCTM(); if (!ctm) return null;
+        const q = pt.matrixTransform(ctm.inverse());
+        if (q.x < M.m.l || q.x > M.m.l + M.pw || q.y < M.m.t || q.y > M.m.t + M.ph) return null;
+        const t = M.tF(M.xLo + (q.x - M.m.l) / M.pw * (M.xHi - M.xLo));
+        const W = inn('W', (M.m.t + M.ph - q.y) / M.ph * M.yHi);
+        if (W < 0 || W > Psy.Ws(t, M.p)) return null;
+        return { t, W };
+      };
+      svg.addEventListener('pointermove', e => {
+        const st = toState(e), el = svg._hover; if (!el) return;
+        el.textContent = st ? `DB ${show('t', st.t)} ${U('t')} · W ${show('W', st.W)} ${U('W')} · RH ${fx(Psy.rh(st.t, st.W, svg._map.p) * 100, 0)}%` : svg._hoverIdle || '';
+      });
+      svg.addEventListener('pointerleave', () => { if (svg._hover) svg._hover.textContent = svg._hoverIdle || ''; });
+      svg.addEventListener('click', e => { const st = toState(e); if (st && svg._pick) svg._pick(st.t, st.W); });
+    }
+    svg._pick = cfg.onPick || null;
+    svg._hover = cfg.hoverEl || null;
+    svg._hoverIdle = cfg.hoverIdle || '';
+  }
+
+  // ======================= global settings + tabs =======================
+  const tabs = ['psych', 'mix', 'duct', 'calcs'];
+  function setTab(t) {
+    if (!tabs.includes(t)) t = 'psych';
+    S.tab = t; save();
+    for (const a of $('tabs').querySelectorAll('a')) a.setAttribute('aria-selected', String(a.dataset.tab === t));
+    const nav = $('tabs'), act = nav.querySelector(`a[data-tab="${t}"]`);
+    if (act && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, act.offsetLeft - nav.offsetLeft - 16);
+    for (const k of tabs) $('tab-' + k).hidden = k !== t;
+    render[t]();
+  }
+  $('tabs').addEventListener('click', e => {
+    const a = e.target.closest('a'); if (!a) return;
+    e.preventDefault();
+    try { history.replaceState(null, '', '#' + a.dataset.tab); } catch (err) {}
+    setTab(a.dataset.tab);
+  });
+  window.addEventListener('hashchange', () => setTab(location.hash.slice(1)));
+  function fillGlobal() {
+    for (const b of $('g-units').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === S.units));
+    $('g-elev').value = inVal('z', num(S.elev));
+    document.querySelectorAll('[data-u]').forEach(el => el.textContent = U(el.dataset.u));
+  }
+  function showPressure() {
+    const ok = S.elev > -1500 && S.elev < 30000;
+    $('g-elev').classList.toggle('bad', !ok);
+    $('g-p').textContent = ok ? `${show('pr', P())} ${U('pr')}` : 'elevation out of range';
+    return ok;
+  }
+  $('g-units').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.dataset.v === S.units) return;
+    // enthalpy is stored in the display system: carry it across using the last solved state
+    if (psyLast) S.psy.vals.h = b.dataset.v === 'SI' ? psyLast.hSI : psyLast.hIP;
+    S.units = b.dataset.v; save(); fillGlobal();
+    psyFill(true); mixFill(); ductFill(true); hcBuildAll();
+    render[S.tab]();
+  });
+  $('g-elev').addEventListener('input', e => { const x = parseFloat(e.target.value); S.elev = Number.isFinite(x) ? inn('z', x) : NaN; save(); render[S.tab](); });
+
+  // ======================= PSYCHROMETRICS =======================
+  const PV = [
+    { k: 'DB', name: 'Dry bulb', kind: 't' },
+    { k: 'WB', name: 'Wet bulb', kind: 't' },
+    { k: 'DP', name: 'Dew point', kind: 't' },
+    { k: 'RH', name: 'Relative humidity', kind: 'rh' },
+    { k: 'W', name: 'Humidity ratio', kind: 'W' },
+    { k: 'h', name: 'Enthalpy', kind: 'h' },
+    { k: 'v', name: 'Specific volume', kind: 'vol' },
+  ];
+  const PN = Object.fromEntries(PV.map(v => [v.k, v.name.toLowerCase()]));
+  let psyLast = null;
+  $('p-calc').innerHTML = PV.map(v => `
+    <div class="var" id="p-v-${v.k}">
+      <div class="top"><span class="name">${v.name} <span class="unit" data-u="${v.kind}"></span></span><button type="button" class="pin" data-k="${v.k}"></button></div>
+      <input type="number" id="p-${v.k}" data-k="${v.k}" step="any" inputmode="decimal" aria-label="${v.name}">
+      <div class="sub" id="p-sub-${v.k}"></div>
+    </div>`).join('') + `
+    <div class="var info" id="p-site">
+      <div class="top"><span class="name">Site pressure <span class="unit" data-u="pr"></span></span></div>
+      <div class="big-num" id="p-site-p"></div>
+      <div class="sub" id="p-site-z"></div>
+    </div>`;
+  function psyPromote(k) {
+    let pins = S.psy.pins.filter(x => x !== k); pins.push(k);
+    for (const [a, b] of Psy.DEPENDENT) { if (k === a) pins = pins.filter(x => x !== b); if (k === b) pins = pins.filter(x => x !== a); }
+    while (pins.length > 2) pins.shift();
+    S.psy.pins = pins;
+  }
+  function psyFill(force) {
+    for (const v of PV) {
+      const el = $('p-' + v.k), pinned = S.psy.pins.includes(v.k);
+      if (!pinned || force) el.value = inVal(v.kind, num(S.psy.vals[v.k]));
+      el.classList.toggle('calcd', !pinned);
+    }
+  }
+  for (const v of PV) {
+    $('p-' + v.k).addEventListener('input', e => {
+      const x = parseFloat(e.target.value);
+      S.psy.vals[v.k] = Number.isFinite(x) ? inn(v.kind, x) : NaN;
+      psyPromote(v.k); save(); renderPsy();
+    });
+  }
+  $('p-calc').addEventListener('click', e => {
+    const b = e.target.closest('.pin'); if (!b) return;
+    const k = b.dataset.k;
+    if (S.psy.pins.includes(k)) S.psy.pins = S.psy.pins.filter(x => x !== k); else psyPromote(k);
+    save(); renderPsy();
+  });
+  $('p-reset').addEventListener('click', () => { S.psy = clone(DEF.psy); psyLast = null; save(); psyFill(true); renderPsy(); });
+  const pickPsy = (t, W) => { S.psy.vals.DB = t; S.psy.vals.W = W; S.psy.pins = ['DB', 'W']; save(); psyFill(true); renderPsy(); };
+
+  function renderPsy() {
+    const pins = S.psy.pins, V = S.psy.vals, errs = [];
+    for (const v of PV) $('p-' + v.k).classList.remove('bad');
+    const okP = showPressure(); if (!okP) errs.push('Set a site elevation between −1,500 and 30,000 ft.');
+    $('p-site-p').textContent = okP ? show('pr', P()) : '—';
+    $('p-site-z').textContent = okP ? `at ${show('z', S.elev)} ${U('z')} elevation` : '';
+    for (const k of pins) {
+      const x = num(V[k]);
+      let bad = !Number.isFinite(x);
+      if (k === 'RH' && !(x > 0 && x <= 1)) bad = true;
+      if (k === 'W' && !(x >= 0)) bad = true;
+      if (k === 'v' && !(x > 0)) bad = true;
+      if (['DB', 'WB', 'DP'].includes(k) && !(x > -100 && x < 250)) bad = true;
+      if (bad) { $('p-' + k).classList.add('bad'); errs.push(`Enter a valid ${PN[k]}${k === 'RH' ? ' (above 0 and up to 100%)' : ''}.`); }
+    }
+    if (pins.length < 2) errs.push(pins.length ? `Enter one more property. Currently using ${PN[pins[0]]} only.` : 'Enter two properties.');
+    let r = null;
+    if (!errs.length) {
+      r = Psy.solve(Object.fromEntries(pins.map(k => [k, V[k]])), P(), SI());
+      if (r.error) { errs.push(r.error); pins.forEach(k => $('p-' + k).classList.add('bad')); r = null; }
+    }
+    for (const v of PV) {
+      const box = $('p-v-' + v.k), pinned = pins.includes(v.k);
+      box.classList.toggle('pinned', pinned);
+      const b = box.querySelector('.pin'); b.textContent = pinned ? 'Input' : 'Calculated';
+      b.title = pinned ? 'Click to release this value' : 'Click to keep this value as an input';
+    }
+    $('p-err').hidden = !errs.length; $('p-err').textContent = errs.join(' ');
+    if (!r) {
+      for (const v of PV) if (!pins.includes(v.k)) { $('p-' + v.k).value = ''; $('p-sub-' + v.k).textContent = ''; }
+      $('p-mode').textContent = '';
+      $('p-more').innerHTML = '<p class="note">Properties appear once two valid values are entered.</p>';
+      psyChart($('p-chart'), { points: [], onPick: pickPsy, hoverEl: $('p-hover'), hoverIdle: 'Click the chart to set dry bulb and humidity ratio.' });
+      $('p-chartsub').textContent = okP ? `at ${show('pr', P())} ${U('pr')}` : '';
+      return;
+    }
+    const pr = r.P; psyLast = pr;
+    for (const v of PV) if (!pins.includes(v.k)) V[v.k] = pr[v.k];
+    save(); psyFill(false);
+    $('p-sub-DB').textContent = ''; $('p-sub-WB').textContent = `depression ${fx(out('t', pr.DB) - out('t', pr.WB), 1)}`;
+    $('p-sub-DP').textContent = ''; $('p-sub-RH').textContent = `μ ${fx(pr.mu * 100, 1)}%`;
+    $('p-sub-W').textContent = `${fx(pr.W, 5)} ${U('Wd')}`;
+    $('p-sub-h').textContent = SI() ? `${fx(pr.hIP, 2)} Btu/lb (IP ref.)` : `${fx(pr.hSI, 2)} kJ/kg (SI ref.)`;
+    $('p-sub-v').textContent = `ρ ${show('rho', pr.rho)} ${U('rho')}`;
+    const solved = PV.filter(v => !pins.includes(v.k)).length;
+    $('p-mode').textContent = `Calculating ${solved} properties from ${PN[pins[0]]} and ${PN[pins[1]]}.`;
+    $('p-more').innerHTML = `<div class="eyebrow">State point</div>
+      <div class="big"><div><div class="v">${show('t', pr.DB)}<small>${U('t')}</small></div></div><div><div class="v" style="color:var(--ink)">${fx(pr.RH * 100, 1)}<small>% RH</small></div></div></div>
+      <dl class="props">` +
+      row('Wet bulb', val('t', pr.WB)) + row('Dew point', val('t', pr.DP)) +
+      row('Humidity ratio', val('W', pr.W)) + row('Enthalpy', val('h', pr.h)) +
+      row('Specific volume', val('vol', pr.v)) + row('Moist air density', val('rho', pr.rho)) +
+      row('Vapor pressure', val('pw', pr.pw)) + row('Saturation humidity ratio', val('W', pr.Ws)) +
+      row('Degree of saturation', fx(pr.mu * 100, 1) + '<small>%</small>') +
+      row('Barometric pressure', val('pr', P())) + `</dl>
+      ${pr.DB < 32 ? '<p class="note">Below freezing, saturation and wet bulb are taken over ice.</p>' : ''}`;
+    $('p-chartsub').textContent = `at ${show('pr', P())} ${U('pr')}`;
+    psyChart($('p-chart'), { points: [{ t: pr.DB, W: pr.W, full: true }], onPick: pickPsy, hoverEl: $('p-hover'), hoverIdle: 'Click the chart to set dry bulb and humidity ratio.' });
+  }
+
+  // ======================= MIXED AIR =======================
+  function buildStream(i) {
+    const el = $('m-s' + i), L = 'AB'[i];
+    el.innerHTML = `
+      <div class="card-head"><span class="tag">${L}</span><input type="text" class="sname" id="m-n${i}" aria-label="Stream ${L} name"></div>
+      <div class="inputs3">
+        <div class="field"><label for="m-q${i}">Flow <span class="unit" data-u="q"></span></label><input type="number" id="m-q${i}" step="any" min="0" inputmode="decimal"></div>
+        <div class="field"><label for="m-t${i}">Dry bulb <span class="unit" data-u="t"></span></label><input type="number" id="m-t${i}" step="any" inputmode="decimal"></div>
+        <div class="field"><label for="m-w${i}">Wet bulb <span class="unit" data-u="t"></span></label><input type="number" id="m-w${i}" step="any" inputmode="decimal"></div>
+      </div>
+      <p class="err" id="m-e${i}" hidden></p>
+      <dl class="props" id="m-p${i}"></dl>`;
+    $('m-n' + i).addEventListener('input', e => { S.mix.streams[i].name = e.target.value; save(); renderMix(); });
+    for (const [k, id, kind] of [['q', 'q', 'q'], ['t', 't', 't'], ['tw', 'w', 't']]) {
+      $(`m-${id}${i}`).addEventListener('input', e => { const x = parseFloat(e.target.value); S.mix.streams[i][k] = Number.isFinite(x) ? inn(kind, x) : NaN; save(); renderMix(); });
+    }
+  }
+  [0, 1].forEach(buildStream);
+  function mixFill() {
+    S.mix.streams.forEach((s, i) => {
+      $('m-n' + i).value = s.name;
+      $('m-q' + i).value = inVal('q', num(s.q)); $('m-t' + i).value = inVal('t', num(s.t)); $('m-w' + i).value = inVal('t', num(s.tw));
+    });
+    $('m-ct').value = inVal('t', num(S.mix.coil.t)); $('m-cw').value = inVal('t', num(S.mix.coil.tw));
+    for (const b of $('m-basis').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === S.mix.basis));
+    document.querySelectorAll('[data-u]').forEach(el => el.textContent = U(el.dataset.u));
+  }
+  for (const [id, k] of [['m-ct', 't'], ['m-cw', 'tw']]) $(id).addEventListener('input', e => { const x = parseFloat(e.target.value); S.mix.coil[k] = Number.isFinite(x) ? inn('t', x) : NaN; save(); renderMix(); });
+  $('m-basis').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.mix.basis = b.dataset.v; save(); mixFill(); renderMix(); });
+
+  function renderMix() {
+    const okP = showPressure(), p = P();
+    let ok = okP;
+    S.mix.streams.forEach((s, i) => {
+      const msgs = [];
+      const q = num(s.q), t = num(s.t), tw = num(s.tw);
+      const bq = !(q > 0); if (bq) msgs.push('Flow must be greater than zero.');
+      const bt = !(t > -100 && t < 250); if (bt) msgs.push('Enter a dry bulb temperature.');
+      let bw = !(tw > -100 && tw < 250);
+      if (bw) msgs.push('Enter a wet bulb temperature.');
+      else if (!bt && tw > t + 1e-9) { bw = true; msgs.push('Wet bulb cannot be higher than dry bulb.'); }
+      else if (!bt && okP && Psy.W_dbwb(t, tw, p) < 0) { bw = true; msgs.push('Wet bulb is too low for this dry bulb.'); }
+      $('m-q' + i).classList.toggle('bad', bq); $('m-t' + i).classList.toggle('bad', bt); $('m-w' + i).classList.toggle('bad', bw);
+      $('m-e' + i).hidden = !msgs.length; $('m-e' + i).textContent = msgs.join(' ');
+      if (msgs.length) ok = false;
+    });
+    const nm = i => esc(S.mix.streams[i].name || 'Stream ' + 'AB'[i]);
+    $('m-legend').innerHTML = `<span style="--c:var(--a)"><i class="dot"></i>A · ${nm(0)}</span><span style="--c:var(--b)"><i class="dot"></i>B · ${nm(1)}</span><span style="--c:var(--accent)"><i class="dot"></i>M · Mixed</span><span style="--c:var(--coil)"><i class="dot"></i>C · Coil leaving</span>`;
+    $('m-chartsub').textContent = okP ? `at ${show('pr', p)} ${U('pr')}` : '';
+    if (!ok) {
+      $('m-out').innerHTML = '<p class="note">Fix the highlighted inputs to see the mixed state.</p>';
+      [0, 1].forEach(i => $('m-p' + i).innerHTML = '');
+      $('m-coilout').innerHTML = '<p class="note">Coil results appear once the mixed state is valid.</p>'; $('m-ce').hidden = true;
+      psyChart($('m-chart'), { points: [] }); return;
+    }
+    const R = Psy.mix(S.mix.streams.map(s => ({ q: s.q, t: s.t, tw: s.tw })), p, S.mix.basis);
+    const M = R.mix;
+    R.streams.forEach((st, i) => {
+      $('m-p' + i).innerHTML = row('Humidity ratio', val('W', st.W)) + row('Relative humidity', fx(st.rh * 100, 1) + '<small>%</small>') +
+        row('Dew point', val('t', st.dp)) + row('Enthalpy', val('h', SI() ? Psy.hSI(st.t, st.W) : st.h)) +
+        row('Specific volume', val('vol', st.v)) + row('Dry-air mass flow', val('m', st.m)) + row('Share of mass', fx(st.m / M.m * 100, 1) + '<small>%</small>');
+    });
+    const dT = out('t', M.t) - out('t', M.tSimple);
+    const qMix = S.mix.basis === 'actual' ? M.qActual : M.qStd;
+    let html = `<div class="big">
+        <div><div class="eyebrow">Dry bulb</div><div class="v">${show('t', M.t)}<small>${U('t')}</small></div></div>
+        <div><div class="eyebrow">Wet bulb</div><div class="v">${show('t', M.wb)}<small>${U('t')}</small></div></div></div>`;
+    if (M.fog) html += `<p class="fog"><strong>Mixture fogs.</strong> The mixing line crosses saturation. Shown is the equilibrium: saturated air plus ${show('W', M.fog.liquid)} ${U('W')} of liquid water (${show('m', M.fog.liquid * M.m)} ${U('m')} condensed).</p>`;
+    html += `<dl class="props">` +
+      row('Humidity ratio' + (M.fog ? ' (vapor)' : ''), val('W', M.W)) + row('Relative humidity', fx(M.rh * 100, 1) + '<small>%</small>') +
+      row('Dew point', val('t', M.dp)) + row('Enthalpy', val('h', SI() ? Psy.hSI(M.t, M.Wtotal) : M.h)) +
+      row('Specific volume', val('vol', M.v)) + row('Dry-air mass flow', val('m', M.m)) +
+      row(S.mix.basis === 'actual' ? 'Mixed flow (actual)' : 'Mixed flow (standard)', val('q', qMix)) +
+      row('Stream A fraction (mass)', fx(R.streams[0].m / M.m * 100, 1) + '<small>%</small>') + `</dl>
+      <p class="note">A CFM-weighted average gives ${show('t', M.tSimple, 2)} ${U('t')}, ${fx(Math.abs(dT), 2)} ${U('t').replace('°', '')} ${dT >= 0 ? 'below' : 'above'} the mass/enthalpy result.` +
+      (S.mix.basis === 'actual' ? ` Actual volume is not conserved: ${show('q', qMix)} ${U('q')} leaves vs. ${show('q', M.qSum)} ${U('q')} entering.` : '') + `</p>
+      <button type="button" class="btn" id="m-toPsy" style="justify-self:start">Open mixed state in Psychrometrics</button>`;
+    $('m-out').innerHTML = html;
+    $('m-toPsy').onclick = () => { pickPsyFromMix(M.t, M.W); };
+    const [a, b] = R.streams;
+    const segs = [{ a: { t: a.t, W: a.W }, b: { t: b.t, W: b.W }, col: 'var(--muted)', dash: true }];
+    const pts = [{ t: a.t, W: a.W, col: 'var(--a)', label: 'A' }, { t: b.t, W: b.W, col: 'var(--b)', label: 'B' }];
+    if (M.fog) { segs.push({ a: { t: M.tLine, W: M.Wtotal }, b: { t: M.t, W: M.W }, col: 'var(--warn)' }); pts.push({ t: M.tLine, W: M.Wtotal, col: 'var(--warn)' }); }
+    pts.push({ t: M.t, W: M.W, col: 'var(--accent)', label: 'M', ly: 22, full: true });
+    // ---- cooling coil ----
+    const cs = S.mix.coil, ct = num(cs.t), cw = num(cs.tw), cerr = [];
+    $('m-ct').classList.remove('bad'); $('m-cw').classList.remove('bad');
+    if (!(ct > -60 && ct < 200)) { $('m-ct').classList.add('bad'); cerr.push('Enter a leaving dry bulb.'); }
+    if (!(cw > -60 && cw < 200)) { $('m-cw').classList.add('bad'); cerr.push('Enter a leaving wet bulb.'); }
+    else if (!cerr.length && cw > ct + 1e-9) { $('m-cw').classList.add('bad'); cerr.push('Wet bulb cannot be higher than dry bulb.'); }
+    else if (!cerr.length && Psy.W_dbwb(ct, cw, p) < 0) { $('m-cw').classList.add('bad'); cerr.push('Wet bulb is too low for this dry bulb.'); }
+    if (!cerr.length && ct >= M.t) { $('m-ct').classList.add('bad'); cerr.push(`Leaving dry bulb must be below the entering ${show('t', M.t)} ${U('t')} for a cooling coil.`); }
+    $('m-ce').hidden = !cerr.length; $('m-ce').textContent = cerr.join(' ');
+    if (cerr.length) $('m-coilout').innerHTML = '';
+    else {
+      const C = Psy.coil({ t: M.t, W: M.Wtotal, h: M.h, m: M.m }, ct, cw, p);
+      const tons = C.qT * 60 / 12000;
+      let ch = `<div class="big">
+          <div><div class="eyebrow">Water removed</div><div class="v">${show('mh', C.cond)}<small>${U('mh')}</small></div></div>
+          <div><div class="eyebrow">Condensate</div><div class="v">${show('gph', C.cond)}<small>${SI() ? 'L/h' : 'gal/h'}</small></div></div>
+          <div><div class="eyebrow">Total load</div><div class="v" style="color:var(--ink)">${fx(tons, 1)}<small>tons</small></div></div></div>`;
+      if (!C.wet) ch += `<p class="warnbox">${C.dW < 0 ? 'Leaving air holds more moisture than the entering air, so this is not a dehumidifying process.' : 'No change in humidity ratio: this is sensible cooling only.'} No condensate.</p>`;
+      if (C.rh > 0.98) ch += `<p class="note">Leaving air is at ${fx(C.rh * 100, 0)}% RH, essentially saturated.</p>`;
+      ch += `<dl class="props">` +
+        row('Condensate', `${show('gph', C.cond)}<small>${U('gph')}</small> · ${show('gpm', C.cond)}<small>${U('gpm')}</small>`) +
+        row('Humidity ratio change', `${show('W', Math.max(0, C.dW))}<small>${U('W')}</small>`) +
+        row('Total cooling', val('ld', C.qT)) +
+        row('Total cooling, tons', `${fx(tons, 2)}<small>tons</small>`) +
+        row('Sensible', val('ld', C.qS)) + row('Latent', val('ld', C.qL)) +
+        row('Sensible heat ratio', fx(C.shr, 2)) +
+        row('Leaving RH', fx(C.rh * 100, 1) + '<small>%</small>') + row('Leaving dew point', val('t', C.dp)) +
+        row('Leaving humidity ratio', val('W', C.W2)) +
+        (C.adp ? row('Apparatus dew point', val('t', C.adp.t)) + row('Bypass factor', fx(C.bf, 3)) : '') + `</dl>` +
+        (C.wet && !C.adp ? `<p class="warnbox">Extended, this coil line never reaches the saturation curve, so a single cooling coil can't produce this leaving state. It removes more moisture than the temperature drop allows; check the leaving wet bulb.</p>` : '') + `
+        <button type="button" class="btn" id="m-coilPsy" style="justify-self:start">Open leaving air in Psychrometrics</button>`;
+      $('m-coilout').innerHTML = ch;
+      $('m-coilPsy').onclick = () => pickPsyFromMix(ct, C.W2);
+      segs.push({ a: { t: M.t, W: M.W }, b: { t: ct, W: C.W2 }, col: 'var(--coil)' });
+      if (C.adp) { segs.push({ a: { t: ct, W: C.W2 }, b: C.adp, col: 'var(--coil)', dash: true }); pts.push({ t: C.adp.t, W: C.adp.W, col: 'var(--coil)', label: 'ADP', lx: -18, ly: -8 }); }
+      pts.push({ t: ct, W: C.W2, col: 'var(--coil)', label: 'C', lx: 12, ly: 16 });
+    }
+    psyChart($('m-chart'), { points: pts, segs });
+  }
+  function pickPsyFromMix(t, W) {
+    S.psy.vals.DB = t; S.psy.vals.W = W; S.psy.pins = ['DB', 'W']; save(); psyFill(true);
+    try { history.replaceState(null, '', '#psych'); } catch (e) {}
+    setTab('psych');
+  }
+
+  // ======================= DUCT SIZER =======================
+  const dIn = [...document.querySelectorAll('#tab-duct input[data-key]')];
+  const roundIP = []; for (let d = 3; d <= 12; d++) roundIP.push(d); for (let d = 14; d <= 60; d += 2) roundIP.push(d); roundIP.push(66, 72, 78, 84, 90, 96);
+  const roundSI = [63, 80, 100, 112, 125, 140, 160, 180, 200, 224, 250, 280, 315, 355, 400, 450, 500, 560, 630, 710, 800, 900, 1000, 1120, 1250, 1400, 1600, 1800, 2000].map(x => x / 25.4);
+  const rectIP = []; for (let s = 4; s <= 120; s += 2) rectIP.push(s);
+  const rectSI = []; for (let s = 100; s <= 3000; s += 50) rectSI.push(s / 25.4);
+  const roundSizes = () => SI() ? roundSI : roundIP, rectSizes = () => SI() ? rectSI : rectIP;
+  const dimTxt = d => SI() ? fx(d * 25.4, 0) : fx(d, Math.abs(d - Math.round(d)) < 0.005 ? 0 : 1);
+  const secName = sec => sec.shape === 'round' ? `${dimTxt(sec.D)} ${U('d')} round` : `${dimTxt(sec.a)} × ${dimTxt(sec.b)} ${U('d')}`;
+  const sizeKey = () => S.duct.shape === 'round' ? 'D' : 'W';
+  const DN = { Q: 'airflow', S: 'duct size', V: 'velocity', fr: 'friction rate' };
+  const validPins = p => {
+    if (new Set(p).size !== p.length) return false;
+    if (p.length <= 2) return true;
+    if (p.length === 3) return p.includes('V') && p.includes('fr') && (p.includes('Q') !== p.includes('S'));
+    return false;
+  };
+  function ductPromote(v) { const d = S.duct; d.pins = d.pins.filter(k => k !== v); d.pins.push(v); while (!validPins(d.pins)) d.pins.shift(); }
+  function ductFill(force) {
+    const d = S.duct;
+    for (const el of dIn) {
+      const v = el.dataset.var;
+      if (!v) { if (force) el.value = inVal(el.dataset.kind, num(d[el.dataset.key])); continue; }
+      const pinned = d.pins.includes(v);
+      if (!pinned || force) el.value = inVal(el.dataset.kind, num(d[el.dataset.key]));
+      el.classList.toggle('calcd', !pinned);
+    }
+    if (force) { $('d-eps').value = inVal('eps', num(d.eps)); $('d-t').value = inVal('t', num(d.tF)); }
+    $('d-mat').value = d.mat; $('d-epsWrap').hidden = d.mat !== 'custom';
+    for (const g of ['shape', 'airMode']) for (const b of $('d-' + g).querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === d[g]));
+    $('d-tWrap').hidden = d.airMode !== 'custom';
+    document.querySelectorAll('.d-round').forEach(el => el.hidden = d.shape !== 'round');
+    document.querySelectorAll('.d-rect').forEach(el => el.hidden = d.shape !== 'rect');
+    document.querySelectorAll('[data-u]').forEach(el => el.textContent = U(el.dataset.u));
+  }
+  for (const el of dIn) el.addEventListener('input', () => {
+    const x = parseFloat(el.value);
+    S.duct[el.dataset.key] = Number.isFinite(x) ? inn(el.dataset.kind, x) : NaN;
+    if (el.dataset.var) ductPromote(el.dataset.var);
+    save(); renderDuct();
+  });
+  $('tab-duct').querySelectorAll('.pin').forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.var, d = S.duct;
+    if (d.pins.includes(v)) d.pins = d.pins.filter(k => k !== v); else ductPromote(v);
+    save(); renderDuct();
+  }));
+  for (const g of ['shape', 'airMode']) $('d-' + g).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || S.duct[g] === b.dataset.v) return;
+    S.duct[g] = b.dataset.v; save(); ductFill(true); renderDuct();
+  });
+  $('d-mat').addEventListener('change', e => { S.duct.mat = e.target.value; if (S.duct.mat !== 'custom') S.duct.eps = +S.duct.mat; save(); ductFill(true); renderDuct(); });
+  $('d-eps').addEventListener('input', e => { const x = parseFloat(e.target.value); S.duct.eps = Number.isFinite(x) ? inn('eps', x) : NaN; save(); renderDuct(); });
+  $('d-t').addEventListener('input', e => { const x = parseFloat(e.target.value); S.duct.tF = Number.isFinite(x) ? inn('t', x) : NaN; save(); renderDuct(); });
+  $('d-reset').addEventListener('click', () => { S.duct = { ...clone(DEF.duct), mat: S.duct.mat, eps: S.duct.eps, airMode: S.duct.airMode, tF: S.duct.tF }; save(); ductFill(true); renderDuct(); });
+
+  let dPlot = null, dLim = {};
+  function renderDuct() {
+    const d = S.duct, errs = [];
+    dIn.forEach(el => el.classList.remove('bad')); $('d-eps').classList.remove('bad'); $('d-t').classList.remove('bad');
+    const bad = (id, msg) => { $(id).classList.add('bad'); errs.push(msg); };
+    const eps = d.mat === 'custom' ? num(d.eps) : +d.mat;
+    if (d.mat === 'custom' && !(eps >= 0 && eps < 0.1)) bad('d-eps', 'Enter a roughness of zero or more.');
+    let air;
+    if (d.airMode === 'custom') {
+      if (!(d.tF > -60 && d.tF < 400)) bad('d-t', 'Air temperature looks out of range.');
+      if (!showPressure()) errs.push('Set a site elevation between −1,500 and 30,000 ft.');
+      air = Duct.air(num(d.tF), S.elev);
+    } else { air = { ...Duct.STD, p: 14.696 }; showPressure(); }
+    $('d-air').textContent = Number.isFinite(air.rho) ? `ρ = ${show('rho', air.rho)} ${U('rho')}${d.airMode === 'custom' ? ` at ${show('z', S.elev)} ${U('z')}` : ''}` : '';
+    if (d.shape === 'rect' && !(d.H > 0)) bad('d-H', 'Enter the fixed duct height.');
+    const Pn = d.pins, has = k => Pn.includes(k);
+    if (has('Q') && !(d.Q > 0)) bad('d-Q', 'Enter an airflow greater than zero.');
+    if (has('S') && !(d[sizeKey()] > 0)) bad('d-' + sizeKey(), 'Enter a duct size greater than zero.');
+    if (has('V') && !(d.V > 0)) bad('d-V', 'Enter a velocity greater than zero.');
+    if (has('fr') && !(d.fr > 0)) bad('d-fr', 'Enter a friction rate greater than zero.');
+    if (Pn.length < 2) errs.push(`Enter one more value.${Pn.length ? ' Currently using ' + DN[Pn[0]] + ' only.' : ''}`);
+    for (const v of ['Q', 'S', 'V', 'fr']) {
+      const box = $('d-v-' + v), pinned = has(v), isLim = pinned && Pn.length === 3 && (v === 'V' || v === 'fr');
+      box.classList.toggle('pinned', pinned); box.classList.toggle('lim', isLim);
+      const b = box.querySelector('.pin'); b.textContent = isLim ? 'Maximum' : pinned ? 'Input' : 'Calculated';
+      b.title = pinned ? 'Click to release this value' : 'Click to keep this value as an input';
+    }
+    $('d-err').hidden = !errs.length; $('d-err').textContent = errs.join(' ');
+    dLim = { fr: has('fr') ? d.fr : 0, V: has('V') ? d.V : 0 };
+    $('d-chartsub').textContent = `${d.airMode === 'std' ? 'standard air' : 'actual air'}, ε = ${show('eps', eps)} ${U('eps')}`;
+    if (errs.length) {
+      for (const v of ['Q', 'S', 'V', 'fr']) $('d-sub-' + v).textContent = '';
+      ductFill(false); $('d-mode').textContent = '';
+      $('d-std').innerHTML = '<p class="note">Results appear once two values are entered.</p>'; $('d-props').innerHTML = '';
+      dPlot = null; drawFric(air, eps); return;
+    }
+    const r = Duct.solve({ shape: d.shape, H: d.H, pins: Pn, eps, air, Q: d.Q, x: d[sizeKey()], V: d.V, fr: d.fr });
+    if (!has('Q')) d.Q = r.Q;
+    if (!has('S')) d[sizeKey()] = r.x;
+    if (!has('V')) d.V = r.c.V;
+    if (!has('fr')) d.fr = r.c.fr;
+    save(); ductFill(false);
+    $('d-sub-Q').textContent = r.gov && !has('Q') ? `limited by ${r.gov}` : '';
+    $('d-sub-S').textContent = d.shape === 'rect' ? `${fx(r.c.aspect, 1)}:1 · equiv. ${show('d', r.c.De, SI() ? 0 : 1)} ${U('d')} round` : `area ${show('a', r.c.A)} ${U('a')}`;
+    $('d-sub-V').textContent = has('V') && Pn.length === 3 ? `actual ${show('v', r.c.V)}` : `Pv ${show('p', r.c.Pv)} ${U('p')}`;
+    $('d-sub-fr').textContent = has('fr') && Pn.length === 3 ? `actual ${show('fr', r.c.fr)}` : '';
+    const solved = ['Q', 'S', 'V', 'fr'].filter(k => !has(k)).map(k => DN[k]);
+    $('d-mode').innerHTML = Pn.length === 3
+      ? `Finding ${solved.join(' and ')} from ${DN[Pn.find(k => k === 'Q' || k === 'S')]}, with velocity and friction as maximums. <strong>${r.gov === 'velocity' ? 'Velocity' : 'Friction'} governs.</strong>`
+      : `Calculating ${solved.join(' and ')} from ${DN[Pn[0]]} and ${DN[Pn[1]]}.`;
+    const lim = dLim;
+    let std = '';
+    dPlot = { Q: r.Q, De: r.c.De };
+    if (!has('S') && has('Q')) {
+      const sizes = d.shape === 'round' ? roundSizes() : rectSizes();
+      const xs = Duct.pickStd(d.shape, d.H, r.Q, lim, eps, air, sizes);
+      std += `<div class="eyebrow">Standard size for ${show('q', r.Q)} ${U('q')}</div>`;
+      if (xs) {
+        const c = Duct.check(Duct.secOf(d.shape, xs, d.H), r.Q, eps, air);
+        dPlot = { Q: r.Q, De: c.De };
+        std += `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap">
+          <div class="stdbig">${d.shape === 'round' ? dimTxt(xs) : dimTxt(xs) + '×' + dimTxt(d.H)}<small>${U('d')}${d.shape === 'round' ? ' round' : ''}</small></div>
+          <button type="button" class="btn" id="d-useStd">Use this size</button></div>
+          <dl class="props">${row('Velocity', val('v', c.V))}${row('Friction rate', val('fr', c.fr))}${row('Velocity pressure', val('p', c.Pv))}</dl>`;
+        const i = sizes.indexOf(xs);
+        if (i > 0) {
+          const c2 = Duct.check(Duct.secOf(d.shape, sizes[i - 1], d.H), r.Q, eps, air);
+          const why = [lim.fr > 0 && c2.fr > lim.fr ? `${show('fr', c2.fr)} ${U('fr')}` : '', lim.V > 0 && c2.V > lim.V ? `${show('v', c2.V)} ${U('v')}` : ''].filter(Boolean).join(', ');
+          std += `<p class="note">Next size down, ${d.shape === 'round' ? dimTxt(sizes[i - 1]) : dimTxt(sizes[i - 1]) + ' × ' + dimTxt(d.H)} ${U('d')}, runs ${why}.</p>`;
+        }
+        if (d.shape === 'rect' && c.aspect > 4) std += `<p class="warnbox">${fx(c.aspect, 1)}:1 aspect ratio. Above about 4:1, friction, fitting losses and sheet metal all climb. Try a taller height.</p>`;
+        $('d-std').innerHTML = std;
+        $('d-useStd').onclick = () => { S.duct[sizeKey()] = xs; S.duct.pins = ['Q', 'S']; save(); ductFill(true); renderDuct(); };
+      } else { std += `<p class="warnbox">No standard size up to ${dimTxt(sizes[sizes.length - 1])} ${U('d')} meets the limits${d.shape === 'rect' ? ' at this height' : ''}.</p>`; $('d-std').innerHTML = std; }
+    } else {
+      std += `<div class="eyebrow">${has('S') ? 'Duct' : 'Solved duct'}</div><div class="stdbig">${d.shape === 'round' ? dimTxt(r.x) : dimTxt(r.x) + ' × ' + dimTxt(d.H)}<small>${U('d')}${d.shape === 'round' ? ' round' : ''}</small></div>`;
+      if (!has('S')) std += `<p class="note">Size from velocity and friction alone. Round it to a standard size, then enter airflow to check it.</p>`;
+      if (d.shape === 'rect' && r.c.aspect > 4) std += `<p class="warnbox">${fx(r.c.aspect, 1)}:1 aspect ratio. Above about 4:1 the equivalent-diameter method and the duct itself both perform worse.</p>`;
+      $('d-std').innerHTML = std;
+    }
+    const c = r.c;
+    let pc = `<div class="eyebrow">At the calculated point</div><dl class="props">` +
+      row(`Friction loss over <span class="lenrow"><input type="number" id="d-len" step="any" min="0" inputmode="decimal" aria-label="Run length" value="${inVal('len', num(d.len))}"> ${U('len')}</span>`, `<span id="d-total">${val('p', c.fr * d.len / 100)}</span>`) +
+      row('Velocity pressure', val('p', c.Pv)) + row('Area', val('a', c.A)) +
+      (d.shape === 'rect' ? row('Equivalent round', val('d', c.De, SI() ? 0 : 2)) + row('Hydraulic diameter', val('d', c.Dh, SI() ? 0 : 2)) + row('Aspect ratio', fx(c.aspect, 2) + ':1') : '') +
+      row('Reynolds number', fx(c.Re, 0)) + row('Friction factor', fx(c.f, 4)) + `</dl>`;
+    if (!has('S') && has('Q')) {
+      const table = Duct.rectTable(r.Q, lim, eps, air, rectSizes());
+      if (table.length) pc += `<div><div class="eyebrow" style="margin:6px 0">${d.shape === 'round' ? 'Rectangular equivalents' : 'Other heights'} · select one to use it</div><div class="tablewrap"><table>
+        <thead><tr><th>W × H</th><th>Aspect</th><th>Velocity</th><th>Friction</th></tr></thead><tbody>` +
+        table.map(t => `<tr class="click${d.shape === 'rect' && Math.abs(t.h - d.H) < 1e-6 ? ' hi' : ''}" data-w="${t.w}" data-h="${t.h}" tabindex="0"><td>${dimTxt(t.w)} × ${dimTxt(t.h)}</td><td class="${t.aspect > 4 ? 'flag' : ''}">${fx(t.aspect, 1)}:1</td><td>${show('v', t.V)}</td><td>${show('fr', t.fr)}</td></tr>`).join('') +
+        `</tbody></table></div><p class="note" style="margin-top:6px">${U('v')} · ${U('fr')}. Smallest standard width for each height.</p></div>`;
+    }
+    $('d-props').innerHTML = pc;
+    $('d-len').addEventListener('input', e => { const x = parseFloat(e.target.value); S.duct.len = Number.isFinite(x) ? inn('len', x) : NaN; save(); $('d-total').innerHTML = val('p', c.fr * S.duct.len / 100); });
+    $('d-props').querySelectorAll('tr.click').forEach(tr => {
+      const use = () => { S.duct.shape = 'rect'; S.duct.W = +tr.dataset.w; S.duct.H = +tr.dataset.h; S.duct.pins = ['Q', 'S']; save(); ductFill(true); renderDuct(); };
+      tr.addEventListener('click', use); tr.addEventListener('keydown', e => { if (e.key === 'Enter') use(); });
+    });
+    drawFric(air, eps);
+  }
+
+  function drawFric(air, eps) {
+    const svg = $('d-chart'), lim = dLim;
+    const W0 = 880, H0 = 520, m = { l: 64, r: 18, t: 14, b: 46 };
+    const pw = W0 - m.l - m.r, ph = H0 - m.t - m.b;
+    const fr0 = 0.01, fr1 = 10, q0 = 10, q1 = 100000;
+    const lx = Math.log10, X = fr => m.l + (lx(fr) - lx(fr0)) / (lx(fr1) - lx(fr0)) * pw, Y = q => m.t + ph - (lx(q) - lx(q0)) / (lx(q1) - lx(q0)) * ph;
+    let s = `<defs><clipPath id="d-clip"><rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+    const tickVals = (lo, hi) => { const r = []; for (let e = Math.floor(lx(lo)) - 1; e <= Math.ceil(lx(hi)) + 1; e++) for (const k of [1, 2, 5]) r.push(k * 10 ** e); return r; };
+    for (const t of tickVals(out('fr', fr0), out('fr', fr1))) {
+      const ip = inn('fr', t); if (ip < fr0 * 0.999 || ip > fr1 * 1.001) continue;
+      const major = Math.abs(lx(t) - Math.round(lx(t))) < 1e-9;
+      s += `<line x1="${X(ip)}" x2="${X(ip)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--grid)" stroke-width="${major ? 1.4 : 1}"/><text x="${X(ip)}" y="${m.t + ph + 16}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${+t.toPrecision(3)}</text>`;
+    }
+    for (const t of tickVals(out('q', q0), out('q', q1))) {
+      const ip = inn('q', t); if (ip < q0 * 0.999 || ip > q1 * 1.001) continue;
+      const major = Math.abs(lx(t) - Math.round(lx(t))) < 1e-9;
+      s += `<line x1="${m.l}" x2="${m.l + pw}" y1="${Y(ip)}" y2="${Y(ip)}" stroke="var(--grid)" stroke-width="${major ? 1.4 : 1}"/><text x="${m.l - 6}" y="${Y(ip) + 3.5}" text-anchor="end" font-size="10.5" fill="var(--muted)">${t >= 1000 ? (t / 1000) + 'k' : +t.toPrecision(3)}</text>`;
+    }
+    s += `<text x="${m.l + pw / 2}" y="${H0 - 8}" text-anchor="middle" font-size="12" fill="var(--muted)">Friction rate, ${U('fr')}</text>`;
+    s += `<text transform="translate(14,${m.t + ph / 2}) rotate(-90)" text-anchor="middle" font-size="12" fill="var(--muted)">Airflow, ${U('q')}</text>`;
+    if (air && Number.isFinite(air.rho) && eps >= 0) {
+      const dset = SI() ? [100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000].map(x => x / 25.4) : [4, 5, 6, 8, 10, 12, 14, 16, 20, 24, 30, 36, 42, 48, 60];
+      let labels = '';
+      for (const Dd of dset) {
+        let path = '';
+        for (let i = 0; i <= 60; i++) { const Q = 10 ** (lx(q0) + (lx(q1) - lx(q0)) * i / 60); path += (i ? 'L' : 'M') + X(Duct.round(Q, Dd, eps, air).fr).toFixed(1) + ',' + Y(Q).toFixed(1); }
+        s += `<path d="${path}" fill="none" stroke="var(--sheet)" stroke-width="1" clip-path="url(#d-clip)"/>`;
+        const Qlab = Math.min(q1 * 0.8, Duct.qForFriction({ shape: 'round', D: Dd }, fr1 * 0.7, eps, air));
+        const frl = Duct.round(Qlab, Dd, eps, air).fr;
+        if (frl >= fr0 && Qlab > q0 * 1.5) labels += `<text x="${X(frl) + 3}" y="${Y(Qlab) - 3}" font-size="10" fill="var(--sheet)">${dimTxt(Dd)}${SI() ? '' : '″'}</text>`;
+      }
+      const vset = SI() ? [1, 2, 3, 4, 5, 7.5, 10, 15, 20].map(v => v / 0.00508) : [200, 400, 600, 800, 1000, 1500, 2000, 3000, 4000];
+      const vPath = V => { let path = '', labPt = null; for (let i = 0; i <= 60; i++) { const Dd = 10 ** (lx(1) + (lx(200) - lx(1)) * i / 60), Q = V * Duct.areaRound(Dd), fr = Duct.round(Q, Dd, eps, air).fr; path += (i ? 'L' : 'M') + X(fr).toFixed(1) + ',' + Y(Q).toFixed(1); if (!labPt && Q > q0 * 1.6 && fr < fr1 * 0.8 && fr > fr0) labPt = [X(fr), Y(Q)]; } return [path, labPt]; };
+      for (const V of vset) {
+        const [path, lab] = vPath(V);
+        s += `<path d="${path}" fill="none" stroke="var(--vel)" stroke-width="1" stroke-dasharray="4 3" opacity=".75" clip-path="url(#d-clip)"/>`;
+        if (lab) labels += `<text x="${lab[0] - 4}" y="${lab[1] + 3}" text-anchor="end" font-size="10" fill="var(--vel)">${SI() ? +out('v', V).toFixed(1) : V}</text>`;
+      }
+      if (lim.fr > 0 && lim.fr >= fr0 && lim.fr <= fr1) s += `<line x1="${X(lim.fr)}" x2="${X(lim.fr)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="2 3"/>`;
+      if (lim.V > 0) s += `<path d="${vPath(lim.V)[0]}" fill="none" stroke="var(--vel)" stroke-width="2" clip-path="url(#d-clip)"/>`;
+      s += labels;
+      if (dPlot && dPlot.Q > 0) {
+        const fr = Duct.round(dPlot.Q, dPlot.De, eps, air).fr;
+        if (fr >= fr0 && fr <= fr1 && dPlot.Q >= q0 && dPlot.Q <= q1) {
+          const px = X(fr), py = Y(dPlot.Q);
+          s += `<line x1="${m.l}" x2="${px}" y1="${py}" y2="${py}" stroke="var(--accent)" stroke-width="1" opacity=".5"/><line x1="${px}" x2="${px}" y1="${py}" y2="${m.t + ph}" stroke="var(--accent)" stroke-width="1" opacity=".5"/>`;
+          s += `<circle cx="${px}" cy="${py}" r="6.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;
+        }
+      }
+    }
+    s += `<rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="none" stroke="var(--line)"/>`;
+    svg.innerHTML = s;
+  }
+
+  // ======================= HVAC CALCULATIONS =======================
+  // Each calculator is a product relation  Π xᵢ^eᵢ = C ; any one variable is solved from the rest.
+  const HC_N = ['sens', 'water', 'ach'];
+  const HV = {
+    sens: () => [
+      { k: 'Q', name: 'Sensible load', kind: 'btuh', e: 1 },
+      { k: 'cfm', name: 'Airflow', kind: 'q', e: -1 },
+      { k: 'dT', name: 'Temperature difference', kind: 'dt', e: -1 },
+    ],
+    water: () => [
+      { k: 'Q', name: 'Load', kind: 'btuh', e: 1 },
+      { k: 'gpm', name: 'Water flow', kind: 'wq', e: -1 },
+      { k: 'dT', name: 'Temperature difference', kind: 'dt', e: -1 },
+    ],
+    ach: () => S.hvac.ach.mode === 'dims' ? [
+      { k: 'ACH', name: 'Air changes per hour', kind: 'ach', e: 1 },
+      { k: 'cfm', name: 'Airflow', kind: 'q', e: -1 },
+      { k: 'L', name: 'Length', kind: 'rl', e: 1 },
+      { k: 'W', name: 'Width', kind: 'rl', e: 1 },
+      { k: 'H', name: 'Ceiling height', kind: 'rl', e: 1 },
+    ] : [
+      { k: 'ACH', name: 'Air changes per hour', kind: 'ach', e: 1 },
+      { k: 'cfm', name: 'Airflow', kind: 'q', e: -1 },
+      { k: 'V', name: 'Room volume', kind: 'vol3', e: 1 },
+    ],
+  };
+  const HCconst = { sens: () => num(S.hvac.sens.k), water: () => num(S.hvac.water.k), ach: () => 60 };
+  const flowKind = { sens: 'q', water: 'wq' };
+  const kOut = (n, k) => SI() ? k * K.btuh.sif / (K[flowKind[n]].sif * K.dt.sif) : k;
+  const kIn = (n, x) => SI() ? x * K[flowKind[n]].sif * K.dt.sif / K.btuh.sif : x;
+  const trim = (x, d) => (+x.toFixed(d)).toLocaleString('en-US', { maximumFractionDigits: d });
+  const kTxt = (n, k) => { if (!Number.isFinite(k)) return '—'; const v = kOut(n, k); return SI() ? trim(v, v >= 100 ? 0 : 3) : trim(v, n === 'water' ? 1 : 3); };
+  const siteK = () => 1.08 * P() / 14.696;
+  const okElev = () => S.elev > -1500 && S.elev < 30000;
+
+  function hcBuild(n) {
+    const st = S.hvac[n], vars = HV[n]();
+    if (!vars.some(v => v.k === st.calc)) st.calc = vars[0].k;
+    $(`hc-${n}-f`).innerHTML = vars.map(v => `
+      <div class="var" id="hc-${n}-v-${v.k}">
+        <div class="top"><span class="name">${v.name} <span class="unit">${U(v.kind)}</span></span><button type="button" class="pin" data-k="${v.k}"></button></div>
+        <input type="number" id="hc-${n}-${v.k}" step="any" min="0" inputmode="decimal" aria-label="${v.name}">
+        <div class="sub" id="hc-${n}-s-${v.k}"></div>
+      </div>`).join('');
+    for (const v of vars) {
+      const el = $(`hc-${n}-${v.k}`);
+      el.value = inVal(v.kind, num(st.vals[v.k]));
+      el.addEventListener('input', () => {
+        const s = S.hvac[n], ks = HV[n]().map(w => w.k), x = parseFloat(el.value);
+        s.vals[v.k] = Number.isFinite(x) ? inn(v.kind, x) : NaN;
+        if (s.calc === v.k) s.calc = s.order.filter(k => k !== v.k && ks.includes(k))[0];
+        s.order = s.order.filter(k => k !== v.k).concat(v.k);
+        save(); hcCompute(n);
+      });
+    }
+    $(`hc-${n}-f`).querySelectorAll('.pin').forEach(b => b.addEventListener('click', () => {
+      const s = S.hvac[n]; if (s.calc === b.dataset.k) return;
+      s.calc = b.dataset.k; save(); hcCompute(n);
+    }));
+  }
+  function hcFillFactor(n) {
+    if (n === 'ach') return;
+    const k = num(S.hvac[n].k), v = kOut(n, k);
+    $(`hc-${n}-k`).value = Number.isFinite(k) ? String(+v.toFixed(v >= 100 ? 1 : 4)) : '';
+    $(`hc-${n}-ku`).textContent = SI() ? 'W per L/s·K' : n === 'sens' ? 'Btu/h per CFM·°F' : 'Btu/h per gpm·°F';
+  }
+  function hcBuildAll() {
+    for (const n of HC_N) { hcBuild(n); hcFillFactor(n); }
+    for (const b of $('hc-ach-mode').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === S.hvac.ach.mode));
+    $('hc-sens-std').textContent = `Standard air · ${kTxt('sens', 1.08)}`;
+    $('hc-water-std').textContent = `Water · ${kTxt('water', 500)}`;
+  }
+  function hcFormula(n) {
+    const st = S.hvac[n], fl = SI() ? 'L/s' : n === 'water' ? 'gpm' : 'CFM';
+    if (n === 'ach') return `ACH = ${SI() ? '3.6' : '60'} × ${fl} ÷ ${st.mode === 'dims' ? '(L × W × H)' : 'V'}`;
+    return `Q = ${kTxt(n, num(st.k))} × ${fl} × ΔT`;
+  }
+  const loadSub = Q => SI() ? `${fx(Q * K.btuh.sif / 1000, 2)} kW` : '';
+  function hcStats(n, Q) {
+    const ok = Number.isFinite(Q) && Q > 0;
+    const src = ok ? (SI() ? `${show('btuh', Q)} W × 3.412 = ${fx(Q, 0)} Btu/h` : `${fx(Q, 0)} Btu/h`) : 'Btu/h';
+    $(`hc-${n}-stats`).innerHTML = `
+      <div class="hc-stat"><div class="eyebrow">Load</div><div class="v">${ok ? fx(Q / 1000, 1) : '—'}<small>MBH</small></div><div class="conv">${src} ÷ 1,000</div></div>
+      <div class="hc-stat"><div class="eyebrow">Cooling</div><div class="v">${ok ? fx(Q / 12000, 2) : '—'}<small>tons</small></div><div class="conv">${src} ÷ 12,000</div></div>`;
+  }
+
+  function hcCompute(n) {
+    const st = S.hvac[n], vars = HV[n](), C = HCconst[n](), errs = [];
+    const cv = vars.find(v => v.k === st.calc);
+    $(`hc-${n}-formula`).textContent = hcFormula(n);
+    let prod = 1;
+    for (const v of vars) {
+      const box = $(`hc-${n}-v-${v.k}`), el = $(`hc-${n}-${v.k}`), isC = v.k === st.calc;
+      box.classList.toggle('pinned', !isC);
+      const b = box.querySelector('.pin');
+      b.textContent = isC ? 'Calculated' : 'Input';
+      b.title = isC ? 'Calculated from the other values' : 'Click to calculate this value instead';
+      el.classList.toggle('calcd', isC); el.classList.remove('bad');
+      $(`hc-${n}-s-${v.k}`).textContent = '';
+      if (isC) continue;
+      const x = num(st.vals[v.k]);
+      if (!(x > 0)) { el.classList.add('bad'); errs.push(`Enter ${/^[aeiou]/i.test(v.name) ? 'an' : 'a'} ${v.name.toLowerCase()} greater than zero.`); }
+      else prod *= x ** v.e;
+    }
+    if (n !== 'ach') $(`hc-${n}-k`).classList.toggle('bad', !(C > 0));
+    if (!(C > 0)) errs.push('Enter a factor greater than zero.');
+    $(`hc-${n}-err`).hidden = !errs.length; $(`hc-${n}-err`).textContent = errs.join(' ');
+    if (errs.length) {
+      $(`hc-${n}-${cv.k}`).value = ''; $(`hc-${n}-eq`).textContent = '';
+      if (n === 'ach') $('hc-ach-extra').textContent = ''; else hcStats(n, NaN);
+      return;
+    }
+    const x = (C / prod) ** (1 / cv.e);
+    st.vals[cv.k] = x;
+    $(`hc-${n}-${cv.k}`).value = inVal(cv.kind, x);
+    const V = st.vals;
+    if (n === 'ach') {
+      const vol = st.mode === 'dims' ? V.L * V.W * V.H : V.V;
+      if (st.mode === 'dims') V.V = vol;
+      $('hc-ach-s-ACH').textContent = `one change every ${fx(60 / V.ACH, 1)} min`;
+      const c = SI() ? '3.6' : '60', rhs = st.mode === 'dims'
+        ? `(${show('rl', V.L)} × ${show('rl', V.W)} × ${show('rl', V.H)} ${U('rl')})`
+        : `${show('vol3', V.V)} ${U('vol3')}`;
+      $('hc-ach-eq').textContent = `${show('ach', V.ACH)} ACH = ${c} × ${show('q', V.cfm)} ${U('q')} ÷ ${rhs}`;
+      if (st.mode === 'dims') {
+        const A = V.L * V.W;
+        $('hc-ach-extra').textContent = `Volume ${show('vol3', vol)} ${U('vol3')} · floor area ${show('area', A)} ${U('area')} · ${fx(out('q', V.cfm) / out('area', A), 2)} ${U('q')} per ${U('area')}`;
+      } else $('hc-ach-extra').textContent = '';
+    } else {
+      const fk = flowKind[n], fl = n === 'sens' ? 'cfm' : 'gpm';
+      $(`hc-${n}-s-Q`).textContent = loadSub(V.Q);
+      hcStats(n, V.Q);
+      $(`hc-${n}-eq`).textContent = `${show('btuh', V.Q)} ${U('btuh')} = ${kTxt(n, C)} × ${show(fk, V[fl])} ${U(fk)} × ${show('dt', V.dT)} ${U('dt')}`;
+    }
+    save();
+  }
+  function renderHC() {
+    const ok = showPressure();
+    $('hc-sens-site').textContent = ok ? `Site elevation · ${kTxt('sens', siteK())}` : 'Site elevation';
+    $('hc-sens-site').disabled = !ok;
+    for (const n of HC_N) hcCompute(n);
+  }
+  for (const n of ['sens', 'water']) $(`hc-${n}-k`).addEventListener('input', e => {
+    const x = parseFloat(e.target.value); S.hvac[n].k = Number.isFinite(x) ? kIn(n, x) : NaN; save(); hcCompute(n);
+  });
+  const setK = (n, k) => { S.hvac[n].k = k; save(); hcFillFactor(n); hcCompute(n); };
+  $('hc-sens-std').addEventListener('click', () => setK('sens', 1.08));
+  $('hc-sens-site').addEventListener('click', () => { if (okElev()) setK('sens', siteK()); });
+  $('hc-water-std').addEventListener('click', () => setK('water', 500));
+  $('hc-ach-mode').addEventListener('click', e => {
+    const b = e.target.closest('button'), st = S.hvac.ach;
+    if (!b || b.dataset.v === st.mode) return;
+    const v = st.vals;
+    if (b.dataset.v === 'vol' && v.L > 0 && v.W > 0 && v.H > 0) v.V = v.L * v.W * v.H;
+    if (b.dataset.v === 'vol' && ['L', 'W', 'H'].includes(st.calc)) st.calc = 'V';
+    if (b.dataset.v === 'dims' && st.calc === 'V') st.calc = 'H';
+    st.mode = b.dataset.v; save(); hcBuildAll(); hcCompute('ach');
+  });
+  $('tab-calcs').addEventListener('click', e => {
+    const b = e.target.closest('[data-reset]'); if (!b) return;
+    const n = b.dataset.reset; S.hvac[n] = clone(DEF.hvac[n]); save(); hcBuildAll(); renderHC();
+  });
+
+  // ======================= boot =======================
+  const render = { psych: renderPsy, mix: renderMix, duct: renderDuct, calcs: renderHC };
+  fillGlobal(); psyFill(true); mixFill(); ductFill(true); hcBuildAll();
+  const h = location.hash.slice(1);
+  setTab(tabs.includes(h) ? h : S.tab);
+})();
+
+</script>
+
+</body>
+</html>
