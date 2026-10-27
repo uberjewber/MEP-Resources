@@ -463,7 +463,38 @@
   for (const [id, k] of [['m-ct', 't'], ['m-cw', 'tw']]) $(id).addEventListener('input', e => { const x = parseFloat(e.target.value); S.mix.coil[k] = Number.isFinite(x) ? inn('t', x) : NaN; save(); renderMix(); });
   $('m-basis').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.mix.basis = b.dataset.v; save(); mixFill(); renderMix(); });
 
+  // ASHRAE Handbook—Fundamentals 2021 (IP), period 1994–2019. c: 0.4% cooling DB/MCWB °F; e: 0.4% enthalpy Btu/lb / MCDB °F; heat: 99.6% DB °F
+  const DESIGN = [
+    { name: 'San Antonio Intl', code: 'SAT', wmo: '722530', elev: 789, p: 14.28, c: [99.3, 73.6], e: [42.0, 88.2], heat: 30.0 },
+    { name: 'Houston Bush Intl', code: 'IAH', wmo: '722430', elev: 95, p: 14.65, c: [97.6, 76.6], e: [43.7, 88.6], heat: 31.4 },
+    { name: 'Austin-Bergstrom', code: 'AUS', wmo: '722540', elev: 480, p: 14.44, c: [100.3, 74.3], e: [42.5, 89.5], heat: 26.6 },
+  ];
+  const enthState = d => { const t = d.e[1], W = (d.e[0] - 0.240 * t) / (1061 + 0.444 * t); return { t, W, wb: Psy.wb(t, W, d.p) }; };
+  function renderDesign() {
+    const A = S.mix.streams[0], near = (x, y) => Math.abs(num(x) - y) < 0.05;
+    const hd = (k, x, d) => `${show(k, x, d)}<small>${U(k)}</small>`;
+    $('m-design').innerHTML = `<thead><tr><th>Location</th><th>Elevation</th>
+        <th>Cooling 0.4%<small>DB / MCWB</small></th><th>Enthalpy 0.4%<small>h / MCDB</small></th><th>Heating 99.6%<small>DB</small></th></tr></thead><tbody>` +
+      DESIGN.map((d, i) => {
+        const es = enthState(d), hv = SI() ? Psy.hSI(es.t, es.W) : d.e[0];
+        const onC = near(A.t, d.c[0]) && near(A.tw, d.c[1]), onE = near(A.t, es.t) && near(A.tw, es.wb);
+        return `<tr><td><span class="loc">${d.name} (${d.code})</span><span class="wmo">WMO ${d.wmo}</span></td>
+          <td>${show('z', d.elev)}<small>${U('z')}</small></td>
+          <td><button type="button" class="dc-pick${onC ? ' on' : ''}" data-dc="${i}" data-k="c" title="Set stream A to ${show('t', d.c[0])} DB / ${show('t', d.c[1])} WB">${show('t', d.c[0])} / ${show('t', d.c[1])}<small>${U('t')}</small></button></td>
+          <td><button type="button" class="dc-pick${onE ? ' on' : ''}" data-dc="${i}" data-k="e" title="Set stream A to ${show('t', es.t)} DB / ${show('t', es.wb)} WB (WB at station pressure)">${fx(hv, 1)}<small>${U('h')}</small> / ${show('t', d.e[1])}<small>${U('t')}</small></button></td>
+          <td>${hd('t', d.heat)}</td></tr>`;
+      }).join('') + `</tbody>`;
+  }
+  $('m-design').addEventListener('click', e => {
+    const b = e.target.closest('.dc-pick'); if (!b) return;
+    const d = DESIGN[+b.dataset.dc], A = S.mix.streams[0];
+    if (b.dataset.k === 'c') { A.t = d.c[0]; A.tw = d.c[1]; }
+    else { const es = enthState(d); A.t = es.t; A.tw = +es.wb.toFixed(2); }
+    save(); mixFill(); renderMix();
+  });
+
   function renderMix() {
+    renderDesign();
     const okP = showPressure(), p = P();
     let ok = okP;
     S.mix.streams.forEach((s, i) => {
