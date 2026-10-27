@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Assemble index.html (GitHub Pages) from src/. Run from anywhere: python3 tools/build.py"""
+"""Assemble index.html (GitHub Pages) from src/. Run from anywhere: python3 tools/build.py
+
+  --preview PATH   also write a body-only copy for publishing as a claude.ai artifact preview
+                   (the artifact host adds its own <!doctype>/<head>/<body> skeleton)."""
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,3 +36,8 @@ doc = f"""<!doctype html>
 """
 (ROOT / "index.html").write_text(doc)
 print(f"wrote index.html ({len(doc):,} bytes)")
+
+if "--preview" in sys.argv:
+    out = Path(sys.argv[sys.argv.index("--preview") + 1])
+    out.write_text(page)
+    print(f"wrote preview {out} ({len(page):,} bytes)")

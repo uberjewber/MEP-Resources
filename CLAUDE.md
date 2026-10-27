@@ -2,7 +2,7 @@
 
 This repo is the home of the **Airside Toolkit**, published with GitHub Pages from `main` / root at
 https://uberjewber.github.io/mep-resources/ . Every change to the toolkit gets committed and pushed
-to `main` here; the push redeploys the site.
+to `main` here once Ari approves it; the push redeploys the site.
 
 ## Layout
 - `index.html` — the built, self-contained page that Pages serves. Generated; don't hand-edit.
@@ -16,10 +16,14 @@ to `main` here; the push redeploys the site.
 - `tools/check.py` — headless Chromium smoke test of every tab at desktop and phone width.
 
 ## Workflow
+Ari reviews every change before it goes live. Never push to `main` without his explicit go-ahead.
 1. Edit files in `src/`.
-2. `python3 tools/build.py`
+2. `python3 tools/build.py --preview <scratch>/airside-preview.html`
 3. `python3 tools/check.py <screenshot-dir>` and look at the screenshots for anything visual.
-4. Commit `src/` and `index.html` together and push to `main`.
+4. Show Ari the mockup: publish the preview file to the "Airside Toolkit" artifact
+   (https://claude.ai/artifact/AiXqLSLQynGTn7nQVQC4kR) and summarize what changed.
+   Commit locally if useful, but do not push.
+5. Only after Ari confirms: commit `src/` and `index.html` together and push to `main`.
 
 ## Conventions
 - Engines stay pure (numbers in, numbers out, no DOM) so they can be tested in Node.
