@@ -498,7 +498,25 @@ const Psy = (() => {
     return (lo + hi) / 2;
   }
   const dew = (W, p) => { const e = pw(W, p); return W <= 0 ? NaN : bisect(t => pws(t) - e, -148, 250); };
-  const wb = (t, W, p) => bisect(tw => W_dbwb(t, tw, p) - W, -148, t);
+  // Eq. 33 (water bulb) and eq. 35 (ice bulb) don't meet at 32 °F. In dry air with a wet bulb near freezing,
+  // some humidity ratios satisfy both: one root below 32 °F (ice) and one above (water). Like PsychroLib,
+  // take the ice root whenever it exists; wbRoots() reports both so the UI can flag the overlap.
+  const ICE = 32 - 1e-9;
+  function wb(t, W, p) {
+    if (t > 32 && W > W_dbwb(t, ICE, p)) return bisect(tw => W_dbwb(t, tw, p) - W, 32, t);
+    return bisect(tw => W_dbwb(t, tw, p) - W, -148, Math.min(t, ICE));
+  }
+  // water-bulb root wherever one exists (used when a wet bulb ≥ 32 °F is entered)
+  function wbWater(t, W, p) {
+    if (t > 32 && W >= W_dbwb(t, 32, p)) return bisect(tw => W_dbwb(t, tw, p) - W, 32, t);
+    return wb(t, W, p);
+  }
+  function wbRoots(t, W, p) {
+    if (!(t > 32)) return null;
+    const wWater = W_dbwb(t, 32, p), wIce = W_dbwb(t, ICE, p);
+    if (!(W >= wWater && W <= wIce)) return null;
+    return { ice: bisect(tw => W_dbwb(t, tw, p) - W, -148, ICE), water: bisect(tw => W_dbwb(t, tw, p) - W, 32, t) };
+  }
   const rh = (t, W, p) => pw(W, p) / pws(t);
   function state(t, W, p) {
     return { t, W, h: h(t, W), v: v(t, W, p), rh: rh(t, W, p), wb: wb(t, W, p), dp: dew(W, p) };
@@ -541,7 +559,7 @@ const Psy = (() => {
   function props(t, W, p, si) {
     const st = state(t, W, p);
     const e = pw(W, p), ws = Ws(t, p);
-    return { DB: t, WB: st.wb, DP: st.dp, RH: st.rh, W, h: si ? hSI(t, W) : st.h, hIP: st.h, hSI: hSI(t, W), v: st.v,
+    return { wbRoots: wbRoots(t, W, p), DB: t, WB: st.wb, DP: st.dp, RH: st.rh, W, h: si ? hSI(t, W) : st.h, hIP: st.h, hSI: hSI(t, W), v: st.v,
       pw: e, Ws: ws, mu: W / ws, rho: (1 + W) / st.v };
   }
   function solve(inp, p, si) {
@@ -549,8 +567,9 @@ const Psy = (() => {
     if (keys.length !== 2) return { error: 'Enter two values.' };
     if (DEPENDENT.some(([a, b]) => keys.includes(a) && keys.includes(b)))
       return { error: keys.includes('DP') ? 'Dew point and humidity ratio describe the same thing. Pick one of them plus another property.' : 'Wet bulb and enthalpy are nearly parallel on the chart, so together they do not fix a state. Pick another pair.' };
+    // an entered WB ≥ 32 °F can only be a water-bulb root, one below 32 °F only an ice-bulb root
     const G = {
-      DB: (t, W) => t, WB: (t, W) => wb(t, W, p), DP: (t, W) => dew(W, p), RH: (t, W) => rh(t, W, p),
+      DB: (t, W) => t, WB: (t, W) => inp.WB >= 32 ? wbWater(t, W, p) : wb(t, W, p), DP: (t, W) => dew(W, p), RH: (t, W) => rh(t, W, p),
       W: (t, W) => W, h: (t, W) => si ? hSI(t, W) : h(t, W), v: (t, W) => v(t, W, p),
     };
     // humidity ratio at temperature t implied by one variable (closed form)
@@ -564,7 +583,8 @@ const Psy = (() => {
         case 'v': return (x * p / (0.370486 * (t + R)) - 1) / 1.607858;
       }
     };
-    const okW = (t, W) => Number.isFinite(W) && W >= -1e-9 && W <= Ws(t, p) * (1 + 1e-6);
+    // 3e-4 tolerance: ASHRAE eq. 35 (ice bulb) returns slightly above Ws when t = t* (≈0.02% at −60 °F)
+    const okW = (t, W) => Number.isFinite(W) && W >= -1e-9 && W <= Ws(t, p) * (1 + 3e-4);
     let t, W;
     const [k1, k2] = keys.includes('DB') ? ['DB', keys.find(k => k !== 'DB')] : keys;
     if (k1 === 'DB') {
@@ -574,15 +594,42 @@ const Psy = (() => {
       const a = ['W', 'DP'].includes(k2) ? k2 : k1, b = a === k1 ? k2 : k1;
       const res = tt => { const w = Wat(a, inp[a], tt); return okW(tt, w) ? G[b](tt, w) - inp[b] : NaN; };
       let prev = null, lo = null, hi = null;
+      // residual treated as zero at a region boundary; sized to a ~1e-4 relative error in W (the eq. 35 mismatch)
+      const tol = { RH: 2e-4, DB: 2e-3, WB: 2e-3, DP: 2e-3, W: 2e-4 * Math.abs(inp[b]) + 1e-9, h: 5e-3, v: 5e-5 }[b];
       // start exactly on the saturation boundary when the first variable fixes it, so saturated states are found
       const t0 = a === 'W' ? dew(inp.W, p) : a === 'DP' ? inp.DP : a === 'WB' ? inp.WB : -100;
       if (Number.isFinite(t0)) {
         const r0 = res(t0);
-        if (Number.isFinite(r0)) { if (Math.abs(r0) < 1e-7 * (1 + Math.abs(inp[b]))) { lo = hi = t0; } else prev = { t: t0, r: r0 }; }
+        // on the saturation boundary, accept a near-zero residual (eq. 35 is not exactly consistent at t = t*)
+        if (Number.isFinite(r0)) { if (Math.abs(r0) < tol) { lo = hi = t0; } else prev = { t: t0, r: r0 }; }
       }
-      for (let tt = Math.ceil(Math.max(-100, Number.isFinite(t0) ? t0 : -100) * 4) / 4; lo == null && tt <= 250; tt += 0.25) {
-        const r = res(tt);
-        if (!Number.isFinite(r)) { prev = null; continue; }
+      // fine steps just above the boundary (narrow valid bands in cold or very dry air), then a 0.25 °F grid
+      const start = Math.max(-100, Number.isFinite(t0) ? t0 : -100), grid = [];
+      if (Number.isFinite(t0)) for (const d of [0.003, 0.01, 0.03, 0.08, 0.16]) grid.push(t0 + d);
+      for (let g = Math.ceil(start * 4) / 4; g <= 250; g += 0.25) if (g > start + 0.16 || !Number.isFinite(t0)) grid.push(g);
+      let lastBad = null;
+      for (const tt of grid) {
+        if (lo != null) break;
+        let r = res(tt);
+        if (Number.isFinite(r) && !prev && lastBad != null) {
+          // just entered the valid region: test its edge so a root right at the boundary is not skipped
+          let a0 = lastBad, b0 = tt;
+          for (let k = 0; k < 50; k++) { const m = (a0 + b0) / 2; if (Number.isFinite(res(m))) b0 = m; else a0 = m; }
+          const re = res(b0);
+          if (Number.isFinite(re)) { if (Math.abs(re) < tol) { lo = hi = b0; break; } if (Math.sign(re) !== Math.sign(r)) { lo = b0; hi = tt; break; } }
+        }
+        if (!Number.isFinite(r)) {
+          lastBad = tt;
+          // stepped out of the valid region (e.g. W < 0 in very dry air): find its edge and test for a crossing there
+          if (prev) {
+            let a0 = prev.t, b0 = tt;
+            for (let k = 0; k < 50; k++) { const m = (a0 + b0) / 2; if (Number.isFinite(res(m))) a0 = m; else b0 = m; }
+            const re = res(a0);
+            if (Number.isFinite(re) && Math.abs(re) < tol) { lo = hi = a0; break; }
+            if (Number.isFinite(re) && Math.sign(re) !== Math.sign(prev.r)) { lo = prev.t; hi = a0; break; }
+          }
+          prev = null; continue;
+        }
         if (r === 0) { lo = hi = tt; break; }
         if (prev && Math.sign(r) !== Math.sign(prev.r)) { lo = prev.t; hi = tt; break; }
         prev = { t: tt, r };
@@ -595,9 +642,15 @@ const Psy = (() => {
       t = (lo + hi) / 2; W = Wat(a, inp[a], t);
     }
     if (!Number.isFinite(W) || W < -1e-9) return { error: 'That combination is drier than bone-dry air (humidity ratio below zero).' };
-    if (W > Ws(t, p) * (1 + 1e-6)) return { error: 'That combination is above saturation (over 100% RH).' };
+    if (W > Ws(t, p) * (1 + 3e-4)) return { error: 'That combination is above saturation (over 100% RH).' };
+    W = Math.min(W, Ws(t, p));
     W = Math.max(0, W);
-    return { t, W, P: props(t, W, p, si) };
+    // confirm the solved state reproduces both inputs (guards against roots straddling a discontinuity)
+    for (const k of keys) { const got = G[k](t, W), want = inp[k], sc = k === 'RH' ? 1e-3 : k === 'W' ? 1e-3 * want + 1e-7 : k === 'v' ? 1e-4 : 0.02;
+      if (!(Math.abs(got - want) <= sc)) return { error: 'No air state matches those two values. Check that the combination is below saturation.' }; }
+    const P = props(t, W, p, si);
+    if ('WB' in inp && P.wbRoots) P.WB = inp.WB;   // both roots are valid in the overlap; keep the one entered
+    return { t, W, P };
   }
 
   // ---- Cooling coil: entering {t, W (total), h (total), m lb_da/min} → leaving DB/WB ----
@@ -622,7 +675,7 @@ const Psy = (() => {
     }
     return { ...state(t2, W2, p), W2, h2, dW, wet, cond: wet ? m * dW : 0, qT, qS, qL, shr: qT !== 0 ? qS / qT : NaN, adp, bf, m };
   }
-  return { coil, pws, pAlt, Ws, W_dbwb, h, hSI, v, pw, dew, wb, rh, state, mix, props, solve, DEPENDENT };
+  return { coil, wbRoots, pws, pAlt, Ws, W_dbwb, h, hSI, v, pw, dew, wb, rh, state, mix, props, solve, DEPENDENT };
 })();
 
 </script>
@@ -1214,7 +1267,8 @@ const Duct = (() => {
       row('Vapor pressure', val('pw', pr.pw)) + row('Saturation humidity ratio', val('W', pr.Ws)) +
       row('Degree of saturation', fx(pr.mu * 100, 1) + '<small>%</small>') +
       row('Barometric pressure', val('pr', P())) + `</dl>
-      ${pr.DB < 32 ? '<p class="note">Below freezing, saturation and wet bulb are taken over ice.</p>' : ''}`;
+      ${pr.DB < 32 ? '<p class="note">Below freezing, saturation and wet bulb are taken over ice.</p>' : ''}
+      ${pr.wbRoots ? `<p class="warnbox">Dry air with a wet bulb near freezing: ASHRAE's ice-bulb and water-bulb equations both fit this state, giving ${show('t', pr.wbRoots.ice)} ${U('t')} (ice) or ${show('t', pr.wbRoots.water)} ${U('t')} (water). The ice value is used unless you enter the wet bulb.</p>` : ''}`;
     $('p-chartsub').textContent = `at ${show('pr', P())} ${U('pr')}`;
     psyChart($('p-chart'), { points: [{ t: pr.DB, W: pr.W, full: true }], onPick: pickPsy, hoverEl: $('p-hover'), hoverIdle: 'Click the chart to set dry bulb and humidity ratio.' });
   }

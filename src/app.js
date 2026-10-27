@@ -428,7 +428,8 @@
       row('Vapor pressure', val('pw', pr.pw)) + row('Saturation humidity ratio', val('W', pr.Ws)) +
       row('Degree of saturation', fx(pr.mu * 100, 1) + '<small>%</small>') +
       row('Barometric pressure', val('pr', P())) + `</dl>
-      ${pr.DB < 32 ? '<p class="note">Below freezing, saturation and wet bulb are taken over ice.</p>' : ''}`;
+      ${pr.DB < 32 ? '<p class="note">Below freezing, saturation and wet bulb are taken over ice.</p>' : ''}
+      ${pr.wbRoots ? `<p class="warnbox">Dry air with a wet bulb near freezing: ASHRAE's ice-bulb and water-bulb equations both fit this state, giving ${show('t', pr.wbRoots.ice)} ${U('t')} (ice) or ${show('t', pr.wbRoots.water)} ${U('t')} (water). The ice value is used unless you enter the wet bulb.</p>` : ''}`;
     $('p-chartsub').textContent = `at ${show('pr', P())} ${U('pr')}`;
     psyChart($('p-chart'), { points: [{ t: pr.DB, W: pr.W, full: true }], onPick: pickPsy, hoverEl: $('p-hover'), hoverIdle: 'Click the chart to set dry bulb and humidity ratio.' });
   }
