@@ -203,11 +203,13 @@ svg.fric { min-width: 560px; }
 .dc-pick:hover { border-bottom-style: solid; }
 @media (max-width: 640px) { .dc-table td .wmo { display: none; } .dc-table th, .dc-table td { padding: 5px 7px; } .dc-table td .loc { white-space: normal; } }
 .dc-pick.on { color: var(--ink); background: var(--accent-soft); border-radius: 3px; padding: 0 4px; border-bottom-color: transparent; }
+.updated { font: .74rem var(--font-num); color: var(--muted); margin-bottom: 4px; }
 </style>
 
 <div class="wrap">
   <div class="topbar">
     <div>
+      <div class="updated" id="last-updated">/*UPDATED*/</div>
       <div class="eyebrow">HVAC airside calculations · ASHRAE Fundamentals methods</div>
       <h1>Airside Toolkit</h1>
       <p>Psychrometric state points, airstream mixing and duct sizing in one place. Units and site elevation apply to every tool.</p>

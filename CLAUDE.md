@@ -23,7 +23,9 @@ Ari reviews every change before it goes live. Never push to `main` without his e
 4. Show Ari the mockup: publish the preview file to the "Airside Toolkit" artifact
    (https://claude.ai/artifact/AiXqLSLQynGTn7nQVQC4kR) and summarize what changed.
    Commit locally if useful, but do not push.
-5. Only after Ari confirms: commit `src/` and `index.html` together and push to `main`.
+5. Only after Ari confirms: run `python3 tools/build.py` again right before committing (it stamps
+   "Last updated …" at the top of the page with the build time), then commit `src/` and `index.html`
+   together and push to `main`.
 
 ## Conventions
 - Engines stay pure (numbers in, numbers out, no DOM) so they can be tested in Node.
