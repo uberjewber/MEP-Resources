@@ -9,7 +9,7 @@ from playwright.async_api import async_playwright
 ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp())
 OUT.mkdir(parents=True, exist_ok=True)
-TABS = ["psych", "mix", "duct", "calcs"]
+TABS = ["psych", "mix", "duct", "pipe", "calcs"]
 
 async def main():
     exe = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"

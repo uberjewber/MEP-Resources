@@ -204,6 +204,27 @@ svg.fric { min-width: 560px; }
 @media (max-width: 640px) { .dc-table td .wmo { display: none; } .dc-table th, .dc-table td { padding: 5px 7px; } .dc-table td .loc { white-space: normal; } }
 .dc-pick.on { color: var(--ink); background: var(--accent-soft); border-radius: 3px; padding: 0 4px; border-bottom-color: transparent; }
 .updated { font: .74rem var(--font-num); color: var(--muted); margin-bottom: 4px; }
+
+/* Pipe sizer */
+.pp-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; align-items: start; }
+.pp-lims { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.var select { font: 500 1.15rem var(--font-num); padding: 8px 10px; }
+.var select.calcd { color: var(--accent); border-style: dashed; }
+.pp-table th, .pp-table td { padding: 5px 8px; }
+.pp-table td.sz { font-family: var(--font-body); font-weight: 600; }
+.pp-table tr.dim td { color: var(--muted); }
+.chip { display: inline-block; font: 600 .68rem var(--font-body); text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
+.chip.ok { background: var(--accent-soft); color: var(--accent); }
+.chip.over { background: var(--warn-soft); color: var(--warn); }
+.chip.low { color: var(--muted); border: 1px solid var(--line); }
+.pp-fits { display: grid; gap: 6px; }
+.pp-fit { display: grid; grid-template-columns: minmax(0, 1fr) 64px 84px 30px; gap: 6px; align-items: center; }
+.pp-fit select { font-size: .88rem; padding: 5px 7px; }
+.pp-fit input[type="number"] { font-size: .92rem; padding: 5px 7px; }
+.pp-fit .le { font: .8rem var(--font-num); color: var(--muted); text-align: right; }
+.pp-fit .x { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 5px; height: 30px; cursor: pointer; }
+.pp-fit .x:hover { color: var(--err); border-color: var(--err); }
+.pp-fit-head { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
 </style>
 
 <div class="wrap">
@@ -227,6 +248,7 @@ svg.fric { min-width: 560px; }
     <a href="#psych" role="tab" data-tab="psych">Psychrometrics<small>any two properties → state point</small></a>
     <a href="#mix" role="tab" data-tab="mix">Mixed air<small>two airstreams → mixed state</small></a>
     <a href="#duct" role="tab" data-tab="duct">Duct sizer<small>airflow, size, velocity, friction</small></a>
+    <a href="#pipe" role="tab" data-tab="pipe">Pipe sizer<small>water, Carrier method</small></a>
     <a href="#calcs" role="tab" data-tab="calcs">HVAC calculations<small>sensible, air changes, water</small></a>
   </nav>
 
@@ -398,6 +420,94 @@ svg.fric { min-width: 560px; }
     </section>
   </section>
 
+  <!-- ================= PIPE SIZER ================= -->
+  <section class="panel" id="tab-pipe" role="tabpanel" hidden>
+    <section class="controls" aria-label="Pipe settings">
+      <div class="field" style="flex:1 1 230px"><label for="pp-mat">Pipe material and system</label><select id="pp-mat"></select></div>
+      <div class="field" style="width:104px"><label for="pp-t">Water temp <span class="unit" data-u="t"></span></label><input type="number" id="pp-t" step="any" inputmode="decimal"></div>
+      <div class="field" style="width:132px"><label for="pp-eps">Roughness ε <span class="unit" data-u="peps"></span></label><input type="number" id="pp-eps" step="any" min="0" inputmode="decimal"></div>
+      <button type="button" class="btn sm" id="pp-eps-reset" hidden>Use material default</button>
+      <div class="derived" id="pp-props"></div>
+    </section>
+
+    <section class="card" aria-label="Pipe calculator">
+      <div class="calc">
+        <div class="var" id="pp-v-Q">
+          <div class="top"><span class="name">Flow <span class="unit" data-u="wq"></span></span><button type="button" class="pin" data-var="Q"></button></div>
+          <input type="number" id="pp-Q" step="any" min="0" inputmode="decimal" aria-label="Flow">
+          <div class="sub" id="pp-sub-Q"></div>
+        </div>
+        <div class="var" id="pp-v-S">
+          <div class="top"><span class="name">Pipe size</span><button type="button" class="pin" data-var="S"></button></div>
+          <select id="pp-S" aria-label="Pipe size"></select>
+          <div class="sub" id="pp-sub-S"></div>
+        </div>
+        <div class="var" id="pp-v-V">
+          <div class="top"><span class="name">Velocity <span class="unit" data-u="fps"></span></span><button type="button" class="pin" data-var="V"></button></div>
+          <input type="number" id="pp-V" step="any" min="0" inputmode="decimal" aria-label="Velocity">
+          <div class="sub" id="pp-sub-V"></div>
+        </div>
+        <div class="var" id="pp-v-fr">
+          <div class="top"><span class="name">Friction rate <span class="unit" data-u="pf"></span></span><button type="button" class="pin" data-var="fr"></button></div>
+          <input type="number" id="pp-fr" step="any" min="0" inputmode="decimal" aria-label="Friction rate">
+          <div class="sub" id="pp-sub-fr"></div>
+        </div>
+      </div>
+      <div class="status"><p class="note" id="pp-mode"></p><button type="button" class="btn" id="pp-reset">Reset to example</button></div>
+      <p class="err" id="pp-err" hidden></p>
+    </section>
+
+    <div class="pp-two">
+      <section class="card" aria-label="Design limits">
+        <h2>Velocity limits</h2>
+        <p class="note" style="margin-top:-6px">The friction target is the friction rate entered in the calculator above.</p>
+        <div class="pp-lims">
+          <div class="field"><label for="pp-svc">Service (Carrier Table 13)</label><select id="pp-svc"></select></div>
+          <div class="field"><label for="pp-hrs">Operating hours per year (Table 14)</label><select id="pp-hrs"></select></div>
+        </div>
+        <dl class="props" id="pp-limtxt"></dl>
+      </section>
+      <section class="card result" id="pp-rec" aria-live="polite" style="border-top:3px solid var(--accent)"></section>
+    </div>
+
+    <div class="pp-two">
+      <section class="card" aria-label="Standard sizes">
+        <div class="chart-head"><h2>Standard sizes at this flow</h2><span class="note">Select a row to use it</span></div>
+        <div class="tablewrap"><table class="pp-table" id="pp-table"></table></div>
+      </section>
+      <section class="card" aria-label="Fittings and total head">
+        <div class="chart-head"><h2>Fittings and total head</h2><span class="note" id="pp-fit-size"></span></div>
+        <div class="pp-lims">
+          <div class="field"><label for="pp-len">Straight pipe <span class="unit" data-u="len"></span></label><input type="number" id="pp-len" step="any" min="0" inputmode="decimal"></div>
+          <div class="field"><label for="pp-other">Other losses <span class="unit" data-u="hd"></span></label><input type="number" id="pp-other" step="any" min="0" inputmode="decimal" placeholder="coils, chiller, valves"></div>
+        </div>
+        <div class="pp-fits" id="pp-fits"></div>
+        <button type="button" class="btn sm" id="pp-addfit" style="justify-self:start">Add fitting</button>
+        <dl class="props" id="pp-total"></dl>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="chart-head">
+        <h2>Friction chart <span class="unit" id="pp-chartsub"></span></h2>
+        <div class="legend">
+          <span style="--c:var(--sheet)"><i></i>Pipe size</span>
+          <span style="--c:var(--vel)"><i class="dash"></i>Velocity</span>
+          <span style="--c:var(--warn)"><i></i>Above 10 ft/100 ft or 15 fps</span>
+          <span style="--c:var(--accent)"><i class="dot"></i>Operating point</span>
+        </div>
+      </div>
+      <div class="chart-scroll"><svg class="chart fric" id="pp-chart" viewBox="0 0 880 520" role="img" aria-label="Water pipe friction chart: flow against friction rate, with pipe-size and velocity lines and the operating point"></svg></div>
+    </section>
+
+    <section class="method">
+      <div><h3>Method</h3><p>Follows Carrier's System Design Manual, Part 3: Darcy–Weisbach friction with the Colebrook friction factor, water properties (IAPWS) at the temperature above. Carrier shades its charts above 15 fps and 10 ft per 100 ft; the example starts at 4 ft per 100 ft. When the calculator's friction rate (or velocity) is an input, it is also the limit for picking a standard size; the service and operating-hour limits below it cap velocity.</p></div>
+      <div><h3>Roughness</h3><p>Closed steel systems use new commercial steel, ε = 0.00015 ft (Carrier Chart 3). Open systems use ε = 0.001 ft, about 40–50% more friction than new steel, as an aging and fouling allowance in place of Chart 4. Copper, PVC and CPVC use 0.000005 ft. Override ε to match your own basis.</p></div>
+      <div><h3>Velocity limits</h3><p>Service ranges follow Carrier Table 13 and erosion limits by annual operating hours follow Table 14; the lower of the two maximums governs. The Table 14 figures came from a secondary source, so confirm them against your copy of the manual.</p></div>
+      <div><h3>Fittings</h3><p>Equivalent length is (L/D) × inside diameter, with L/D from Crane TP-410 (e.g. standard 90° elbow 30, tee branch 60, butterfly valve 45/35/25 by size). Pipe length is measured to fitting centerlines, as in Carrier's procedure. Add coils, chillers and control valves under other losses.</p></div>
+    </section>
+  </section>
+
   <!-- ================= HVAC CALCULATIONS ================= -->
   <section class="panel" id="tab-calcs" role="tabpanel" hidden>
     <div class="hc-grid">
@@ -459,6 +569,9 @@ svg.fric { min-width: 560px; }
 </script>
 <script>
 /*DUCT*/
+</script>
+<script>
+/*PIPE*/
 </script>
 <script>
 /*APP*/

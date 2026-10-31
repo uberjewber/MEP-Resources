@@ -211,13 +211,34 @@ svg.fric { min-width: 560px; }
 @media (max-width: 640px) { .dc-table td .wmo { display: none; } .dc-table th, .dc-table td { padding: 5px 7px; } .dc-table td .loc { white-space: normal; } }
 .dc-pick.on { color: var(--ink); background: var(--accent-soft); border-radius: 3px; padding: 0 4px; border-bottom-color: transparent; }
 .updated { font: .74rem var(--font-num); color: var(--muted); margin-bottom: 4px; }
+
+/* Pipe sizer */
+.pp-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; align-items: start; }
+.pp-lims { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.var select { font: 500 1.15rem var(--font-num); padding: 8px 10px; }
+.var select.calcd { color: var(--accent); border-style: dashed; }
+.pp-table th, .pp-table td { padding: 5px 8px; }
+.pp-table td.sz { font-family: var(--font-body); font-weight: 600; }
+.pp-table tr.dim td { color: var(--muted); }
+.chip { display: inline-block; font: 600 .68rem var(--font-body); text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
+.chip.ok { background: var(--accent-soft); color: var(--accent); }
+.chip.over { background: var(--warn-soft); color: var(--warn); }
+.chip.low { color: var(--muted); border: 1px solid var(--line); }
+.pp-fits { display: grid; gap: 6px; }
+.pp-fit { display: grid; grid-template-columns: minmax(0, 1fr) 64px 84px 30px; gap: 6px; align-items: center; }
+.pp-fit select { font-size: .88rem; padding: 5px 7px; }
+.pp-fit input[type="number"] { font-size: .92rem; padding: 5px 7px; }
+.pp-fit .le { font: .8rem var(--font-num); color: var(--muted); text-align: right; }
+.pp-fit .x { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 5px; height: 30px; cursor: pointer; }
+.pp-fit .x:hover { color: var(--err); border-color: var(--err); }
+.pp-fit-head { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="topbar">
     <div>
-      <div class="updated" id="last-updated">Last updated Oct 27, 2026, 2:37 PM CT</div>
+      <div class="updated" id="last-updated">Last updated Oct 31, 2026, 11:37 AM CT</div>
       <div class="eyebrow">HVAC airside calculations · ASHRAE Fundamentals methods</div>
       <h1>Airside Toolkit</h1>
       <p>Psychrometric state points, airstream mixing and duct sizing in one place. Units and site elevation apply to every tool.</p>
@@ -235,6 +256,7 @@ svg.fric { min-width: 560px; }
     <a href="#psych" role="tab" data-tab="psych">Psychrometrics<small>any two properties → state point</small></a>
     <a href="#mix" role="tab" data-tab="mix">Mixed air<small>two airstreams → mixed state</small></a>
     <a href="#duct" role="tab" data-tab="duct">Duct sizer<small>airflow, size, velocity, friction</small></a>
+    <a href="#pipe" role="tab" data-tab="pipe">Pipe sizer<small>water, Carrier method</small></a>
     <a href="#calcs" role="tab" data-tab="calcs">HVAC calculations<small>sensible, air changes, water</small></a>
   </nav>
 
@@ -403,6 +425,94 @@ svg.fric { min-width: 560px; }
       <div><h3>Friction</h3><p>Darcy–Weisbach, <code>Δp = f·(L/D)·ρV²/2</code>, with the Colebrook friction factor and the selected roughness. Galvanized steel at standard air is the basis of the ASHRAE friction chart and slide-rule duct calculators. Fitting losses are not included.</p></div>
       <div><h3>Rectangular duct</h3><p>Height is held fixed and width is solved. Friction uses the Huebscher equivalent, <code>De = 1.30·(ab)^0.625 / (a+b)^0.25</code>; velocity uses the actual area. Aspect ratios above 4:1 are flagged.</p></div>
       <div><h3>Actual air</h3><p>Density from dry-air ideal gas at the air temperature and the site pressure for the elevation above; viscosity from Sutherland's law. Airflow is then actual volume.</p></div>
+    </section>
+  </section>
+
+  <!-- ================= PIPE SIZER ================= -->
+  <section class="panel" id="tab-pipe" role="tabpanel" hidden>
+    <section class="controls" aria-label="Pipe settings">
+      <div class="field" style="flex:1 1 230px"><label for="pp-mat">Pipe material and system</label><select id="pp-mat"></select></div>
+      <div class="field" style="width:104px"><label for="pp-t">Water temp <span class="unit" data-u="t"></span></label><input type="number" id="pp-t" step="any" inputmode="decimal"></div>
+      <div class="field" style="width:132px"><label for="pp-eps">Roughness ε <span class="unit" data-u="peps"></span></label><input type="number" id="pp-eps" step="any" min="0" inputmode="decimal"></div>
+      <button type="button" class="btn sm" id="pp-eps-reset" hidden>Use material default</button>
+      <div class="derived" id="pp-props"></div>
+    </section>
+
+    <section class="card" aria-label="Pipe calculator">
+      <div class="calc">
+        <div class="var" id="pp-v-Q">
+          <div class="top"><span class="name">Flow <span class="unit" data-u="wq"></span></span><button type="button" class="pin" data-var="Q"></button></div>
+          <input type="number" id="pp-Q" step="any" min="0" inputmode="decimal" aria-label="Flow">
+          <div class="sub" id="pp-sub-Q"></div>
+        </div>
+        <div class="var" id="pp-v-S">
+          <div class="top"><span class="name">Pipe size</span><button type="button" class="pin" data-var="S"></button></div>
+          <select id="pp-S" aria-label="Pipe size"></select>
+          <div class="sub" id="pp-sub-S"></div>
+        </div>
+        <div class="var" id="pp-v-V">
+          <div class="top"><span class="name">Velocity <span class="unit" data-u="fps"></span></span><button type="button" class="pin" data-var="V"></button></div>
+          <input type="number" id="pp-V" step="any" min="0" inputmode="decimal" aria-label="Velocity">
+          <div class="sub" id="pp-sub-V"></div>
+        </div>
+        <div class="var" id="pp-v-fr">
+          <div class="top"><span class="name">Friction rate <span class="unit" data-u="pf"></span></span><button type="button" class="pin" data-var="fr"></button></div>
+          <input type="number" id="pp-fr" step="any" min="0" inputmode="decimal" aria-label="Friction rate">
+          <div class="sub" id="pp-sub-fr"></div>
+        </div>
+      </div>
+      <div class="status"><p class="note" id="pp-mode"></p><button type="button" class="btn" id="pp-reset">Reset to example</button></div>
+      <p class="err" id="pp-err" hidden></p>
+    </section>
+
+    <div class="pp-two">
+      <section class="card" aria-label="Design limits">
+        <h2>Velocity limits</h2>
+        <p class="note" style="margin-top:-6px">The friction target is the friction rate entered in the calculator above.</p>
+        <div class="pp-lims">
+          <div class="field"><label for="pp-svc">Service (Carrier Table 13)</label><select id="pp-svc"></select></div>
+          <div class="field"><label for="pp-hrs">Operating hours per year (Table 14)</label><select id="pp-hrs"></select></div>
+        </div>
+        <dl class="props" id="pp-limtxt"></dl>
+      </section>
+      <section class="card result" id="pp-rec" aria-live="polite" style="border-top:3px solid var(--accent)"></section>
+    </div>
+
+    <div class="pp-two">
+      <section class="card" aria-label="Standard sizes">
+        <div class="chart-head"><h2>Standard sizes at this flow</h2><span class="note">Select a row to use it</span></div>
+        <div class="tablewrap"><table class="pp-table" id="pp-table"></table></div>
+      </section>
+      <section class="card" aria-label="Fittings and total head">
+        <div class="chart-head"><h2>Fittings and total head</h2><span class="note" id="pp-fit-size"></span></div>
+        <div class="pp-lims">
+          <div class="field"><label for="pp-len">Straight pipe <span class="unit" data-u="len"></span></label><input type="number" id="pp-len" step="any" min="0" inputmode="decimal"></div>
+          <div class="field"><label for="pp-other">Other losses <span class="unit" data-u="hd"></span></label><input type="number" id="pp-other" step="any" min="0" inputmode="decimal" placeholder="coils, chiller, valves"></div>
+        </div>
+        <div class="pp-fits" id="pp-fits"></div>
+        <button type="button" class="btn sm" id="pp-addfit" style="justify-self:start">Add fitting</button>
+        <dl class="props" id="pp-total"></dl>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="chart-head">
+        <h2>Friction chart <span class="unit" id="pp-chartsub"></span></h2>
+        <div class="legend">
+          <span style="--c:var(--sheet)"><i></i>Pipe size</span>
+          <span style="--c:var(--vel)"><i class="dash"></i>Velocity</span>
+          <span style="--c:var(--warn)"><i></i>Above 10 ft/100 ft or 15 fps</span>
+          <span style="--c:var(--accent)"><i class="dot"></i>Operating point</span>
+        </div>
+      </div>
+      <div class="chart-scroll"><svg class="chart fric" id="pp-chart" viewBox="0 0 880 520" role="img" aria-label="Water pipe friction chart: flow against friction rate, with pipe-size and velocity lines and the operating point"></svg></div>
+    </section>
+
+    <section class="method">
+      <div><h3>Method</h3><p>Follows Carrier's System Design Manual, Part 3: Darcy–Weisbach friction with the Colebrook friction factor, water properties (IAPWS) at the temperature above. Carrier shades its charts above 15 fps and 10 ft per 100 ft; the example starts at 4 ft per 100 ft. When the calculator's friction rate (or velocity) is an input, it is also the limit for picking a standard size; the service and operating-hour limits below it cap velocity.</p></div>
+      <div><h3>Roughness</h3><p>Closed steel systems use new commercial steel, ε = 0.00015 ft (Carrier Chart 3). Open systems use ε = 0.001 ft, about 40–50% more friction than new steel, as an aging and fouling allowance in place of Chart 4. Copper, PVC and CPVC use 0.000005 ft. Override ε to match your own basis.</p></div>
+      <div><h3>Velocity limits</h3><p>Service ranges follow Carrier Table 13 and erosion limits by annual operating hours follow Table 14; the lower of the two maximums governs. The Table 14 figures came from a secondary source, so confirm them against your copy of the manual.</p></div>
+      <div><h3>Fittings</h3><p>Equivalent length is (L/D) × inside diameter, with L/D from Crane TP-410 (e.g. standard 90° elbow 30, tee branch 60, butterfly valve 45/35/25 by size). Pipe length is measured to fitting centerlines, as in Carrier's procedure. Add coils, chillers and control valves under other losses.</p></div>
     </section>
   </section>
 
@@ -839,6 +949,137 @@ const Duct = (() => {
 
 </script>
 <script>
+// ---- Water pipe friction engine (IP units internally) ----
+// Basis: Carrier System Design Manual Part 3 (Piping Design) method: Darcy–Weisbach friction, Schedule 40/80
+// steel for closed and open systems, Type K/L/M copper; plus PVC/CPVC. Q gpm, d inches (inside), V fps,
+// friction rate ft of water per 100 ft (equals m per 100 m), roughness eps in ft.
+const Pipe = (() => {
+  // Inside diameters, inches. Steel: ASME B36.10 published IDs. PVC: ASTM D1785. CPVC: ASTM F441.
+  // Copper: ASTM B88 (OD − 2 × nominal wall). Rows: [nominal size, DN, ID].
+  const S40 = [['1/2', 15, 0.622], ['3/4', 20, 0.824], ['1', 25, 1.049], ['1-1/4', 32, 1.38], ['1-1/2', 40, 1.61], ['2', 50, 2.067], ['2-1/2', 65, 2.469], ['3', 80, 3.068], ['4', 100, 4.026], ['5', 125, 5.047], ['6', 150, 6.065], ['8', 200, 7.981], ['10', 250, 10.02], ['12', 300, 11.938], ['14', 350, 13.124], ['16', 400, 15.0], ['18', 450, 16.876], ['20', 500, 18.812], ['24', 600, 22.624]];
+  const S80 = [['1/2', 15, 0.546], ['3/4', 20, 0.742], ['1', 25, 0.957], ['1-1/4', 32, 1.278], ['1-1/2', 40, 1.5], ['2', 50, 1.939], ['2-1/2', 65, 2.323], ['3', 80, 2.9], ['4', 100, 3.826], ['5', 125, 4.813], ['6', 150, 5.761], ['8', 200, 7.625], ['10', 250, 9.562], ['12', 300, 11.374], ['14', 350, 12.5], ['16', 400, 14.312], ['18', 450, 16.124], ['20', 500, 17.938], ['24', 600, 21.562]];
+  const PVC40 = [['1/2', 15, 0.622], ['3/4', 20, 0.824], ['1', 25, 1.049], ['1-1/4', 32, 1.38], ['1-1/2', 40, 1.61], ['2', 50, 2.067], ['2-1/2', 65, 2.469], ['3', 80, 3.068], ['4', 100, 4.026], ['5', 125, 5.047], ['6', 150, 6.065], ['8', 200, 7.981], ['10', 250, 10.02], ['12', 300, 11.938], ['14', 350, 13.126], ['16', 400, 15.0], ['18', 450, 16.876], ['20', 500, 18.814], ['24', 600, 22.626]];
+  const PVC80 = [['1/2', 15, 0.546], ['3/4', 20, 0.742], ['1', 25, 0.957], ['1-1/4', 32, 1.278], ['1-1/2', 40, 1.5], ['2', 50, 1.939], ['2-1/2', 65, 2.323], ['3', 80, 2.9], ['4', 100, 3.826], ['5', 125, 4.813], ['6', 150, 5.761], ['8', 200, 7.625], ['10', 250, 9.564], ['12', 300, 11.376], ['14', 350, 12.5], ['16', 400, 14.314], ['18', 450, 16.126], ['20', 500, 17.938], ['24', 600, 21.564]];
+  const CPVC40 = [['1/2', 15, 0.622], ['3/4', 20, 0.824], ['1', 25, 1.049], ['1-1/4', 32, 1.38], ['1-1/2', 40, 1.61], ['2', 50, 2.067], ['2-1/2', 65, 2.469], ['3', 80, 3.068], ['4', 100, 4.026], ['5', 125, 5.047], ['6', 150, 6.065], ['8', 200, 7.981], ['10', 250, 10.02], ['12', 300, 11.938], ['14', 350, 13.126], ['16', 400, 15.0]];
+  const CPVC80 = [['1/2', 15, 0.546], ['3/4', 20, 0.742], ['1', 25, 0.957], ['1-1/4', 32, 1.278], ['1-1/2', 40, 1.5], ['2', 50, 1.939], ['2-1/2', 65, 2.323], ['3', 80, 2.9], ['4', 100, 3.826], ['5', 125, 4.813], ['6', 150, 5.761], ['8', 200, 7.625], ['10', 250, 9.564], ['12', 300, 11.376], ['14', 350, 12.5], ['16', 400, 14.314]];
+  const CUK = [['1/2', null, 0.527], ['3/4', null, 0.745], ['1', null, 0.995], ['1-1/4', null, 1.245], ['1-1/2', null, 1.481], ['2', null, 1.959], ['2-1/2', null, 2.435], ['3', null, 2.907], ['4', null, 3.857], ['5', null, 4.805], ['6', null, 5.741], ['8', null, 7.583]];
+  const CUL = [['1/2', null, 0.545], ['3/4', null, 0.785], ['1', null, 1.025], ['1-1/4', null, 1.265], ['1-1/2', null, 1.505], ['2', null, 1.985], ['2-1/2', null, 2.465], ['3', null, 2.945], ['4', null, 3.905], ['5', null, 4.875], ['6', null, 5.845], ['8', null, 7.725]];
+  const CUM = [['1/2', null, 0.569], ['3/4', null, 0.811], ['1', null, 1.055], ['1-1/4', null, 1.291], ['1-1/2', null, 1.527], ['2', null, 2.009], ['2-1/2', null, 2.495], ['3', null, 2.981], ['4', null, 3.935], ['5', null, 4.907], ['6', null, 5.881], ['8', null, 7.785]];
+  // Absolute roughness, ft. New commercial steel 0.00015 (ASHRAE/Moody). Open systems: 0.001 ft, an aging and
+  // fouling allowance (≈1.4–1.5× new-steel friction) standing in for Carrier Chart 4. Drawn copper, PVC, CPVC 0.000005.
+  const EPS = { steelNew: 0.00015, steelOpen: 0.001, smooth: 0.000005 };
+  const MATERIALS = {
+    s40c: { name: 'Steel Sch 40, closed system', sizes: S40, eps: EPS.steelNew, chart: 'Carrier Chart 3' },
+    s40o: { name: 'Steel Sch 40, open system', sizes: S40, eps: EPS.steelOpen, chart: 'Carrier Chart 4' },
+    s80c: { name: 'Steel Sch 80, closed system', sizes: S80, eps: EPS.steelNew },
+    s80o: { name: 'Steel Sch 80, open system', sizes: S80, eps: EPS.steelOpen },
+    cuK: { name: 'Copper Type K', sizes: CUK, eps: EPS.smooth, chart: 'Carrier Chart 5' },
+    cuL: { name: 'Copper Type L', sizes: CUL, eps: EPS.smooth, chart: 'Carrier Chart 5' },
+    cuM: { name: 'Copper Type M', sizes: CUM, eps: EPS.smooth, chart: 'Carrier Chart 5' },
+    pvc40: { name: 'PVC Sch 40', sizes: PVC40, eps: EPS.smooth },
+    pvc80: { name: 'PVC Sch 80', sizes: PVC80, eps: EPS.smooth },
+    cpvc40: { name: 'CPVC Sch 40', sizes: CPVC40, eps: EPS.smooth },
+    cpvc80: { name: 'CPVC Sch 80', sizes: CPVC80, eps: EPS.smooth },
+  };
+  // Water at 1 atm, IAPWS-95 (CoolProp): [°F, density lb/ft³, dynamic viscosity lb/(ft·s) × 1e6]
+  const WATER = [[33, 62.4203, 1181.0537], [35, 62.4237, 1137.1999], [40, 62.4263, 1038.2936], [45, 62.4213, 952.4898], [50, 62.4094, 877.5241], [55, 62.391, 811.6047], [60, 62.3666, 753.2991], [65, 62.3366, 701.4506], [70, 62.3013, 655.117], [75, 62.2611, 613.5244], [80, 62.2161, 576.0322], [85, 62.1668, 542.1063], [90, 62.1131, 511.2985], [95, 62.0555, 483.2301], [100, 61.9939, 457.5794], [105, 61.9287, 434.0714], [110, 61.8599, 412.4701], [115, 61.7877, 392.5715], [120, 61.7121, 374.1989], [125, 61.6334, 357.1983], [130, 61.5515, 341.435], [135, 61.4667, 326.7907], [140, 61.3789, 313.1611], [145, 61.2883, 300.4541], [150, 61.1949, 288.5879], [155, 61.0988, 277.4896], [160, 61.0, 267.0942], [165, 60.8987, 257.3434], [170, 60.7948, 248.185], [175, 60.6885, 239.572], [180, 60.5797, 231.4619], [185, 60.4684, 223.8164], [190, 60.3549, 216.6006], [195, 60.2389, 209.783], [200, 60.1207, 203.3348], [205, 60.0002, 197.2298], [210, 59.8775, 191.4442]];
+  function water(tF) {
+    const t = Math.min(Math.max(tF, WATER[0][0]), WATER[WATER.length - 1][0]);
+    let i = 0; while (i < WATER.length - 2 && WATER[i + 1][0] < t) i++;
+    const [t0, r0, m0] = WATER[i], [t1, r1, m1] = WATER[i + 1], k = (t - t0) / (t1 - t0);
+    // viscosity interpolated in log space (it varies nearly exponentially with temperature)
+    return { rho: r0 + k * (r1 - r0), mu: Math.exp(Math.log(m0) + k * (Math.log(m1) - Math.log(m0))) * 1e-6 };
+  }
+  const vel = (Q, d) => Q * 0.13368055 / 60 / (Math.PI * d * d / 4 / 144);      // fps
+  function friction(Re, rr) {
+    if (Re < 2300) return 64 / Re;
+    let f = 0.25 / Math.log10(rr / 3.7 + 5.74 / Re ** 0.9) ** 2;
+    for (let i = 0; i < 50; i++) {
+      const fn = 1 / (-2 * Math.log10(rr / 3.7 + 2.51 / (Re * Math.sqrt(f)))) ** 2;
+      if (Math.abs(fn - f) < 1e-12) return fn;
+      f = fn;
+    }
+    return f;
+  }
+  // Hydraulics of flow Q through inside diameter d
+  function flow(Q, d, eps, w) {
+    const V = vel(Q, d), D = d / 12, Re = w.rho * V * D / w.mu, f = friction(Re, eps / D);
+    return { Q, d, V, Re, f, fr: f * (100 / D) * V * V / (2 * 32.174), hv: V * V / (2 * 32.174) };
+  }
+  function bisectLog(fn, lo, hi) { for (let i = 0; i < 100; i++) { const m = Math.sqrt(lo * hi); if (fn(m) > 0) hi = m; else lo = m; } return Math.sqrt(lo * hi); }
+  const dForFr = (Q, fr, eps, w) => bisectLog(d => fr - flow(Q, d, eps, w).fr, 0.05, 200);
+  const qForFr = (d, fr, eps, w) => bisectLog(Q => flow(Q, d, eps, w).fr - fr, 1e-4, 1e7);
+  const dForV = (Q, V) => Math.sqrt(Q * 0.13368055 / 60 / V / Math.PI * 4 * 144);
+  // Any two of Q, size (inside diameter), V, friction rate
+  function solve({ pins, Q, d, V, fr, eps, w }) {
+    const has = k => pins.includes(k);
+    let q, dd;
+    if (has('Q') && has('S')) { q = Q; dd = d; }
+    else if (has('Q') && has('V')) { q = Q; dd = dForV(Q, V); }
+    else if (has('Q') && has('fr')) { q = Q; dd = dForFr(Q, fr, eps, w); }
+    else if (has('S') && has('V')) { dd = d; q = V * Math.PI * d * d / 4 / 144 * 60 / 0.13368055; }
+    else if (has('S') && has('fr')) { dd = d; q = qForFr(d, fr, eps, w); }
+    else {
+      // velocity + friction: friction falls with size at fixed velocity, except for a jump up at the
+      // laminar/turbulent transition, where two sizes can share the same V and friction. Scan down from
+      // the largest size so the turbulent answer (the one that matters for design) is found first.
+      const qOf = x => V * Math.PI * x * x / 4 / 144 * 60 / 0.13368055, g = x => fr - flow(qOf(x), x, eps, w).fr;
+      let hi = 200, ghi = g(hi), lo = null;
+      for (let i = 399; i >= 0; i--) { const x = 0.05 * Math.pow(4000, i / 400), gx = g(x); if (gx <= 0 && ghi > 0) { lo = x; break; } hi = x; ghi = gx; }
+      if (lo == null) lo = 0.05;
+      dd = bisectLog(g, lo, hi); q = qOf(dd);
+    }
+    return flow(q, dd, eps, w);
+  }
+  const meets = (r, lim) => (!(lim.fr > 0) || r.fr <= lim.fr * (1 + 1e-9)) && (!(lim.V > 0) || r.V <= lim.V * (1 + 1e-9));
+  // Every standard size at flow Q, with the smallest one that meets the limits
+  function table(sizes, Q, lim, eps, w) {
+    const rows = sizes.map(([nps, dn, d]) => ({ nps, dn, d, ...flow(Q, d, eps, w) }));
+    const pick = rows.find(r => meets(r, lim)) || null;
+    return { rows, pick };
+  }
+  // Fittings: equivalent length = (L/D) × inside diameter, L/D from Crane TP-410
+  const FITTINGS = [
+    { k: 'ell90', name: '90° elbow, standard', LD: 30 },
+    { k: 'ell90lr', name: '90° elbow, long radius', LD: 20 },
+    { k: 'ell45', name: '45° elbow', LD: 16 },
+    { k: 'teeRun', name: 'Tee, flow through run', LD: 20 },
+    { k: 'teeBr', name: 'Tee, flow through branch', LD: 60 },
+    { k: 'gate', name: 'Gate valve, open', LD: 8 },
+    { k: 'ball', name: 'Ball valve, full port', LD: 3 },
+    { k: 'bfly', name: 'Butterfly valve', LD: d => d <= 8.5 ? 45 : d <= 14.5 ? 35 : 25 },
+    { k: 'globe', name: 'Globe valve, open', LD: 340 },
+    { k: 'angle', name: 'Angle valve, open', LD: 150 },
+    { k: 'check', name: 'Swing check valve', LD: 100 },
+    { k: 'liftchk', name: 'Lift check valve', LD: 600 },
+    { k: 'plug', name: 'Plug valve, straightway', LD: 18 },
+  ];
+  function equivLength(items, d) {
+    let L = 0;
+    for (const it of items) {
+      const F = FITTINGS.find(f => f.k === it.k); if (!F || !(it.n > 0)) continue;
+      const LD = typeof F.LD === 'function' ? F.LD(d) : F.LD;
+      L += it.n * LD * d / 12;
+    }
+    return L;
+  }
+  // Carrier Table 13: recommended velocity by service, fps
+  const SERVICES = [
+    { k: 'discharge', name: 'Pump discharge', min: 8, max: 12 },
+    { k: 'suction', name: 'Pump suction', min: 4, max: 7 },
+    { k: 'drain', name: 'Drain line', min: 4, max: 7 },
+    { k: 'header', name: 'Header', min: 4, max: 15 },
+    { k: 'riser', name: 'Riser', min: 3, max: 10 },
+    { k: 'general', name: 'General service', min: 5, max: 10 },
+    { k: 'city', name: 'City water', min: 3, max: 7 },
+  ];
+  // Carrier Table 14: maximum velocity to limit erosion, by normal operating hours per year (fps)
+  const EROSION = [[1500, 15], [2000, 14], [3000, 13], [4000, 12], [6000, 10], [8000, 8]];
+  return { MATERIALS, EPS, WATER, water, vel, flow, solve, table, meets, FITTINGS, equivLength, SERVICES, EROSION, dForFr, qForFr };
+})();
+
+</script>
+<script>
 (() => {
   const $ = id => document.getElementById(id);
   const KEY = 'airside-toolkit-v1';
@@ -852,6 +1093,8 @@ const Duct = (() => {
       water: { calc: 'Q', order: ['Q', 'gpm', 'dT'], k: 500, vals: { Q: 120000, gpm: 24, dT: 10 } },
       ach: { calc: 'ACH', order: ['ACH', 'V', 'cfm', 'L', 'W', 'H'], mode: 'dims', vals: { ACH: 6, V: 4000, cfm: 400, L: 20, W: 20, H: 10 } },
     },
+    pipe: { mat: 's40c', tF: 60, eps: null, pins: ['Q', 'fr'], Q: 150, nps: '3', dCalc: NaN, V: 6, fr: 4, svc: 'general', hrs: 4000, len: 200, other: 0,
+      fittings: [{ k: 'ell90', n: 8 }, { k: 'teeRun', n: 2 }, { k: 'teeBr', n: 2 }, { k: 'bfly', n: 2 }, { k: 'check', n: 1 }] },
     duct: { shape: 'round', mat: '0.0003', eps: 0.0003, airMode: 'std', tF: 70, pins: ['Q', 'fr'], Q: 1000, D: 14, W: 20, H: 10, V: 900, fr: 0.08, len: 100 },
   };
   let S = clone(DEF);
@@ -866,6 +1109,8 @@ const Duct = (() => {
     h.order = [...keys.filter(k => !ord.includes(k)), ...ord];
     S.hvac[n] = h;
   }
+  S.pipe = { ...clone(DEF.pipe), ...(S.pipe || {}) };
+  if (!Array.isArray(S.pipe.fittings)) S.pipe.fittings = clone(DEF.pipe.fittings);
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
   const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : NaN;
 
@@ -900,6 +1145,12 @@ const Duct = (() => {
     mh:  { ipf: 60, sif: 0.45359237 * 60, ip: 'lb/h', si: 'kg/h', dip: 1, dsi: 1 },        // from lb/min
     gph: { ipf: 60 / 8.34, sif: 0.45359237 * 60, ip: 'gph', si: 'L/h', dip: 2, dsi: 1 },  // from lb/min of water
     gpm: { ipf: 1 / 8.34, sif: 0.45359237, ip: 'gpm', si: 'L/min', dip: 3, dsi: 2 },
+    fps:  { ipf: 1, sif: 0.3048, ip: 'fps', si: 'm/s', dip: 2, dsi: 2 },
+    pf:   { ipf: 1, sif: 9.79, ip: 'ft/100 ft', si: 'kPa/100 m', dip: 2, dsi: 2 },   // sif set from water density
+    hd:   { ipf: 1, sif: 0.3048, ip: 'ft', si: 'm', dip: 1, dsi: 2 },
+    psi:  { ipf: 1, sif: 6.894757, ip: 'psi', si: 'kPa', dip: 2, dsi: 1 },
+    pid:  { ipf: 1, sif: 25.4, ip: 'in', si: 'mm', dip: 3, dsi: 1 },
+    peps: { ipf: 1, sif: 304.8, ip: 'ft', si: 'mm', dip: 6, dsi: 4 },
     ld:  { ipf: 60, sif: 60 * 0.00029307107, ip: 'Btu/h', si: 'kW', dip: 0, dsi: 2 },     // from Btu/min
   };
   const out = (k, x) => k === 't' ? (SI() ? (x - 32) / 1.8 : x) : x * (SI() ? K[k].sif : K[k].ipf);
@@ -1124,7 +1375,7 @@ const Duct = (() => {
   }
 
   // ======================= global settings + tabs =======================
-  const tabs = ['psych', 'mix', 'duct', 'calcs'];
+  const tabs = ['psych', 'mix', 'duct', 'pipe', 'calcs'];
   function setTab(t) {
     if (!tabs.includes(t)) t = 'psych';
     S.tab = t; save();
@@ -1157,7 +1408,7 @@ const Duct = (() => {
     // enthalpy is stored in the display system: carry it across using the last solved state
     if (psyLast) S.psy.vals.h = b.dataset.v === 'SI' ? psyLast.hSI : psyLast.hIP;
     S.units = b.dataset.v; save(); fillGlobal();
-    psyFill(true); mixFill(); ductFill(true); hcBuildAll();
+    psyFill(true); mixFill(); ductFill(true); hcBuildAll(); ppFill(true); ppFits();
     render[S.tab]();
   });
   $('g-elev').addEventListener('input', e => { const x = parseFloat(e.target.value); S.elev = Number.isFinite(x) ? inn('z', x) : NaN; save(); render[S.tab](); });
@@ -1809,9 +2060,229 @@ const Duct = (() => {
     const n = b.dataset.reset; S.hvac[n] = clone(DEF.hvac[n]); save(); hcBuildAll(); renderHC();
   });
 
+  // ======================= PIPE SIZER =======================
+  const ppMat = () => Pipe.MATERIALS[S.pipe.mat] || Pipe.MATERIALS.s40c;
+  const ppEps = () => Number.isFinite(num(S.pipe.eps)) ? S.pipe.eps : ppMat().eps;
+  const ppTempOk = () => S.pipe.tF >= 33 && S.pipe.tF <= 210;
+  const ppWater = () => Pipe.water(ppTempOk() ? S.pipe.tF : 60);
+  const ppRow = nps => ppMat().sizes.find(r => r[0] === nps);
+  const ppLabel = r => SI() && r[1] ? `DN${r[1]}` : `${r[0]} in`;
+  const ppLabelFull = r => SI() && r[1] ? `DN${r[1]} (${r[0]} in)` : `${r[0]} in`;
+  const PPN = { Q: 'flow', S: 'pipe size', V: 'velocity', fr: 'friction rate' };
+  const ppSetPf = () => { K.pf.sif = ppWater().rho * 16.01846 * 9.80665 / 1000; };   // m/100 m of head → kPa/100 m
+  $('pp-mat').innerHTML = Object.entries(Pipe.MATERIALS).map(([k, m]) => `<option value="${k}">${m.name}${m.chart ? ' · ' + m.chart : ''}</option>`).join('');
+  $('pp-svc').innerHTML = `<option value="">Not limiting</option>` + Pipe.SERVICES.map(s => `<option value="${s.k}">${s.name}</option>`).join('');
+  function ppPromote(v) { const p = S.pipe; p.pins = p.pins.filter(k => k !== v); p.pins.push(v); while (p.pins.length > 2) p.pins.shift(); }
+  function ppLimits() {
+    const p = S.pipe, svc = Pipe.SERVICES.find(s => s.k === p.svc) || null, ero = Pipe.EROSION.find(e => e[0] === +p.hrs) || null;
+    // friction target and any entered velocity come from the calculator; service and erosion add velocity caps
+    const vIn = p.pins.includes('V') && p.V > 0 ? p.V : Infinity;
+    const cands = [['your velocity', vIn], ['service', svc ? svc.max : Infinity], ['erosion', ero ? ero[1] : Infinity]];
+    const g = cands.reduce((a, c) => (c[1] < a[1] ? c : a));
+    return { fr: p.pins.includes('fr') && p.fr > 0 ? p.fr : 0, V: Number.isFinite(g[1]) ? g[1] : 0, Vmin: svc ? svc.min : 0, svc, ero,
+      gov: Number.isFinite(g[1]) ? g[0] : null };
+  }
+  function ppFill(force) {
+    const p = S.pipe; ppSetPf();
+    $('pp-mat').value = p.mat; $('pp-svc').value = p.svc || '';
+    $('pp-hrs').innerHTML = `<option value="">Not limiting</option>` + Pipe.EROSION.map(([h, v]) => `<option value="${h}">${h.toLocaleString('en-US')} h (${show('fps', v, SI() ? 1 : 0)} ${U('fps')})</option>`).join('');
+    $('pp-hrs').value = p.hrs ? String(p.hrs) : '';
+    if (force) {
+      $('pp-t').value = inVal('t', num(p.tF)); $('pp-eps').value = inVal('peps', ppEps());
+      $('pp-len').value = inVal('len', num(p.len)); $('pp-other').value = inVal('hd', num(p.other));
+    }
+    $('pp-eps-reset').hidden = !Number.isFinite(num(p.eps));
+    for (const [k, id, kind] of [['Q', 'pp-Q', 'wq'], ['V', 'pp-V', 'fps'], ['fr', 'pp-fr', 'pf']]) {
+      const pinned = p.pins.includes(k);
+      if (!pinned || force) $(id).value = inVal(kind, num(p[k]));
+      $(id).classList.toggle('calcd', !pinned);
+    }
+    const sPinned = p.pins.includes('S');
+    $('pp-S').innerHTML = (sPinned ? '' : `<option value="">${Number.isFinite(num(p.dCalc)) ? `ID ${show('pid', p.dCalc)} ${U('pid')}` : '—'}</option>`) +
+      ppMat().sizes.map(r => `<option value="${r[0]}">${ppLabelFull(r)}</option>`).join('');
+    $('pp-S').value = sPinned ? p.nps : '';
+    $('pp-S').classList.toggle('calcd', !sPinned);
+    document.querySelectorAll('#tab-pipe [data-u]').forEach(el => el.textContent = U(el.dataset.u));
+  }
+  for (const [k, id, kind] of [['Q', 'pp-Q', 'wq'], ['V', 'pp-V', 'fps'], ['fr', 'pp-fr', 'pf']]) $(id).addEventListener('input', e => {
+    const x = parseFloat(e.target.value); S.pipe[k] = Number.isFinite(x) ? inn(kind, x) : NaN; ppPromote(k); save(); renderPipe();
+  });
+  $('pp-S').addEventListener('change', e => { if (!e.target.value) return; S.pipe.nps = e.target.value; ppPromote('S'); save(); ppFill(false); renderPipe(); });
+  $('tab-pipe').querySelectorAll('.calc .pin').forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.var, p = S.pipe;
+    if (p.pins.includes(v)) p.pins = p.pins.filter(k => k !== v); else ppPromote(v);
+    save(); ppFill(false); renderPipe();
+  }));
+  $('pp-mat').addEventListener('change', e => {
+    const p = S.pipe, oldD = (ppRow(p.nps) || [0, 0, num(p.dCalc)])[2];
+    p.mat = e.target.value; p.eps = null;
+    if (!ppRow(p.nps)) { const rows = ppMat().sizes; p.nps = rows.reduce((a, r) => Math.abs(r[2] - oldD) < Math.abs(a[2] - oldD) ? r : a, rows[0])[0]; }
+    save(); ppFill(true); renderPipe();
+  });
+  const ppNum = (id, key, kind) => $(id).addEventListener('input', e => { const x = parseFloat(e.target.value); S.pipe[key] = Number.isFinite(x) ? inn(kind, x) : NaN; save(); if (key === 'tF') ppFill(false); renderPipe(); });
+  ppNum('pp-t', 'tF', 't'); ppNum('pp-eps', 'eps', 'peps'); ppNum('pp-len', 'len', 'len'); ppNum('pp-other', 'other', 'hd');
+  $('pp-eps-reset').addEventListener('click', () => { S.pipe.eps = null; save(); ppFill(true); renderPipe(); });
+  $('pp-svc').addEventListener('change', e => { S.pipe.svc = e.target.value; save(); renderPipe(); });
+  $('pp-hrs').addEventListener('change', e => { S.pipe.hrs = e.target.value ? +e.target.value : 0; save(); renderPipe(); });
+  $('pp-reset').addEventListener('click', () => { S.pipe = clone(DEF.pipe); save(); ppFill(true); ppFits(); renderPipe(); });
+  const ppUse = nps => { S.pipe.nps = nps; S.pipe.pins = ['Q', 'S']; save(); ppFill(false); renderPipe(); };
+
+  // fittings list
+  function ppFits() {
+    const p = S.pipe;
+    $('pp-fits').innerHTML = (p.fittings.length ? `<div class="pp-fit pp-fit-head"><span>Fitting</span><span>Qty</span><span style="text-align:right">Equiv. each</span><span></span></div>` : '') +
+      p.fittings.map((f, i) => `<div class="pp-fit" data-i="${i}">
+        <select aria-label="Fitting type">${Pipe.FITTINGS.map(F => `<option value="${F.k}"${F.k === f.k ? ' selected' : ''}>${F.name}</option>`).join('')}</select>
+        <input type="number" min="0" step="1" inputmode="numeric" value="${num(f.n) >= 0 ? f.n : ''}" aria-label="Quantity">
+        <span class="le" data-le="${i}"></span>
+        <button type="button" class="x" aria-label="Remove fitting">×</button></div>`).join('');
+  }
+  $('pp-fits').addEventListener('input', e => {
+    const row = e.target.closest('.pp-fit'); if (!row) return; const i = +row.dataset.i, f = S.pipe.fittings[i];
+    if (e.target.tagName === 'SELECT') f.k = e.target.value; else { const x = parseFloat(e.target.value); f.n = Number.isFinite(x) ? x : 0; }
+    save(); renderPipe();
+  });
+  $('pp-fits').addEventListener('click', e => {
+    const b = e.target.closest('.x'); if (!b) return; S.pipe.fittings.splice(+b.closest('.pp-fit').dataset.i, 1); save(); ppFits(); renderPipe();
+  });
+  $('pp-addfit').addEventListener('click', () => { S.pipe.fittings.push({ k: 'ell90', n: 1 }); save(); ppFits(); renderPipe(); });
+
+  function renderPipe() {
+    showPressure();
+    const p = S.pipe, errs = [];
+    ['pp-Q', 'pp-V', 'pp-fr', 'pp-t', 'pp-eps', 'pp-len', 'pp-other', 'pp-S'].forEach(id => $(id).classList.remove('bad'));
+    const bad = (id, msg) => { $(id).classList.add('bad'); errs.push(msg); };
+    if (!ppTempOk()) bad('pp-t', `Enter a water temperature between ${show('t', 33, 0)} and ${show('t', 210, 0)} ${U('t')}.`);
+    const eps = ppEps(); if (!(eps >= 0 && eps < 0.05)) bad('pp-eps', 'Enter a roughness of zero or more.');
+    const w = ppWater(); ppSetPf();
+    $('pp-props').textContent = `ρ ${show('rho', w.rho)} ${U('rho')} · μ ${fx(w.mu * 1488.164, 3)} cP`;
+    const has = k => p.pins.includes(k);
+    if (has('Q') && !(p.Q > 0)) bad('pp-Q', 'Enter a flow greater than zero.');
+    if (has('V') && !(p.V > 0)) bad('pp-V', 'Enter a velocity greater than zero.');
+    if (has('fr') && !(p.fr > 0)) bad('pp-fr', 'Enter a friction rate greater than zero.');
+    if (has('S') && !ppRow(p.nps)) bad('pp-S', 'Select a pipe size.');
+    if (p.pins.length < 2) errs.push(`Enter one more value.${p.pins.length ? ' Currently using ' + PPN[p.pins[0]] + ' only.' : ''}`);
+    for (const v of ['Q', 'S', 'V', 'fr']) {
+      const box = $('pp-v-' + v), pinned = has(v); box.classList.toggle('pinned', pinned);
+      const b = box.querySelector('.pin'); b.textContent = pinned ? 'Input' : 'Calculated';
+      b.title = pinned ? 'Click to release this value' : 'Click to keep this value as an input';
+    }
+    const lim = ppLimits();
+    $('pp-limtxt').innerHTML =
+      row('Friction target', lim.fr > 0 ? `${show('pf', lim.fr)}<small>${U('pf')} (calculator)</small>` : '<small>none, friction is being calculated</small>') +
+      row('Service velocity range', lim.svc ? `${show('fps', lim.svc.min, SI() ? 1 : 0)}–${show('fps', lim.svc.max, SI() ? 1 : 0)}<small>${U('fps')}</small>` : 'none') +
+      row('Erosion limit', lim.ero ? `${show('fps', lim.ero[1], SI() ? 1 : 0)}<small>${U('fps')} at ${lim.ero[0].toLocaleString('en-US')} h/yr</small>` : 'none') +
+      row('Governing max velocity', lim.V > 0 ? `${show('fps', lim.V, SI() ? 1 : 0)}<small>${U('fps')} (${lim.gov})</small>` : 'none');
+    $('pp-chartsub').textContent = `${ppMat().name}, ε = ${show('peps', eps)} ${U('peps')}, ${show('t', p.tF, 0)} ${U('t')}`;
+    $('pp-err').hidden = !errs.length; $('pp-err').textContent = errs.join(' ');
+    if (errs.length) {
+      ['Q', 'S', 'V', 'fr'].forEach(v => $('pp-sub-' + v).textContent = ''); $('pp-mode').textContent = '';
+      $('pp-rec').innerHTML = '<p class="note">Results appear once two valid values are entered.</p>';
+      $('pp-table').innerHTML = ''; $('pp-total').innerHTML = ''; $('pp-fit-size').textContent = '';
+      ppDraw(w, eps, lim, null); return;
+    }
+    const r = Pipe.solve({ pins: p.pins, Q: p.Q, d: has('S') ? ppRow(p.nps)[2] : NaN, V: p.V, fr: p.fr, eps, w });
+    if (!has('Q')) p.Q = r.Q; if (!has('V')) p.V = r.V; if (!has('fr')) p.fr = r.fr; if (!has('S')) p.dCalc = r.d;
+    save(); ppFill(false);
+    $('pp-sub-Q').textContent = SI() ? `${fx(r.Q * 0.2271247, 2)} m³/h` : `${fx(r.Q * 500 * 10 / 12000, 1)} tons at 10 °F ΔT`;
+    $('pp-sub-S').textContent = has('S') ? `ID ${show('pid', r.d)} ${U('pid')}` : `required ID ${show('pid', r.d)} ${U('pid')}`;
+    $('pp-sub-V').textContent = `velocity head ${fx(out('hd', r.hv), 3)} ${U('hd')}`;
+    $('pp-sub-fr').textContent = `Re ${fx(r.Re, 0)}${r.Re < 2300 ? ' (laminar)' : ''} · f ${fx(r.f, 4)}`;
+    const solved = ['Q', 'S', 'V', 'fr'].filter(k => !has(k)).map(k => PPN[k]);
+    $('pp-mode').textContent = `Calculating ${solved.join(' and ')} from ${PPN[p.pins[0]]} and ${PPN[p.pins[1]]}.`;
+
+    // recommendation and size table at this flow
+    const T = Pipe.table(ppMat().sizes, r.Q, lim, eps, w), pick = T.pick;
+    const status = x => x.fr > lim.fr && lim.fr > 0 ? '<span class="chip over">Friction</span>' : x.V > lim.V && lim.V > 0 ? '<span class="chip over">Velocity</span>' : x.V < lim.Vmin ? '<span class="chip low">Low velocity</span>' : '<span class="chip ok">OK</span>';
+    const qTxt = `${show('wq', r.Q, SI() ? 2 : 1)} ${U('wq')}`;
+    const limTxt = [lim.fr > 0 ? `friction ≤ ${show('pf', lim.fr)} ${U('pf')}` : '', lim.V > 0 ? `velocity ≤ ${show('fps', lim.V, SI() ? 2 : 1)} ${U('fps')} (${lim.gov})` : ''].filter(Boolean).join(', ');
+    let rec = `<div class="eyebrow">Smallest standard size for ${qTxt}</div><p class="note" style="margin-top:-8px">${limTxt ? 'Meeting ' + limTxt + '.' : 'No limits set: enter a friction rate or velocity, or pick a service or operating hours.'}</p>`;
+    if (pick) {
+      const i = T.rows.indexOf(pick), dn = T.rows[i - 1];
+      const using = has('S') && p.nps === pick.nps;
+      rec += `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap">
+        <div class="stdbig">${ppLabelFull([pick.nps, pick.dn])}</div>${using ? '<span class="chip ok">In use</span>' : '<button type="button" class="btn" id="pp-use">Use this size</button>'}</div>
+        <dl class="props">${row('Velocity', val('fps', pick.V))}${row('Friction rate', val('pf', pick.fr))}${row('Inside diameter', val('pid', pick.d))}</dl>`;
+      if (dn) rec += `<p class="note">Next size down, ${ppLabel([dn.nps, dn.dn])}, runs ${show('pf', dn.fr)} ${U('pf')} at ${show('fps', dn.V)} ${U('fps')}${dn.fr > lim.fr && lim.fr > 0 ? ', over the friction target' : ''}${dn.V > lim.V && lim.V > 0 ? (dn.fr > lim.fr && lim.fr > 0 ? ' and' : ',') + ' over the velocity limit' : ''}.</p>`;
+      if (pick.V < lim.Vmin) rec += `<p class="note">Velocity is below the ${lim.svc.name.toLowerCase()} range of ${show('fps', lim.svc.min, SI() ? 1 : 0)}–${show('fps', lim.svc.max, SI() ? 1 : 0)} ${U('fps')}; the limits are met, but the pipe may be oversized for this service.</p>`;
+    } else rec += `<p class="warnbox">No ${ppMat().name.toLowerCase()} size up to ${ppLabel(T.rows[T.rows.length - 1])} meets the limits at this flow.</p>`;
+    $('pp-rec').innerHTML = rec;
+    if ($('pp-use')) $('pp-use').onclick = () => ppUse(pick.nps);
+    $('pp-table').innerHTML = `<thead><tr><th>Size</th><th>ID</th><th>Velocity</th><th>Friction</th><th>Status</th></tr></thead><tbody>` +
+      (p.allSizes ? T.rows : T.rows.slice(Math.max(0, (pick ? T.rows.indexOf(pick) : T.rows.length - 1) - 3), (pick ? T.rows.indexOf(pick) : T.rows.length - 1) + 4)).map(x => `<tr class="click${(has('S') ? p.nps === x.nps : pick && pick.nps === x.nps) ? ' hi' : ''}${x.V < 0.5 || x.fr > 40 ? ' dim' : ''}" data-nps="${x.nps}" tabindex="0">
+        <td class="sz">${ppLabel([x.nps, x.dn])}</td><td>${show('pid', x.d)}</td><td>${show('fps', x.V)}</td><td>${show('pf', x.fr)}</td><td>${status(x)}</td></tr>`).join('') +
+      `</tbody>`;
+    $('pp-table').insertAdjacentHTML('beforeend', `<caption style="caption-side:bottom;text-align:left;padding-top:6px" class="note">${U('pid')} · ${U('fps')} · ${U('pf')}. ${p.allSizes ? 'All sizes.' : 'Three sizes either side of the recommendation.'} <button type="button" class="btn sm" id="pp-all">${p.allSizes ? 'Show fewer' : 'Show all sizes'}</button></caption>`);
+    $('pp-all').onclick = e => { e.stopPropagation(); S.pipe.allSizes = !S.pipe.allSizes; save(); renderPipe(); };
+    $('pp-table').querySelectorAll('tr.click').forEach(tr => { const go = () => ppUse(tr.dataset.nps); tr.addEventListener('click', go); tr.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+
+    // fittings and total head, at the size in use (or the recommended size)
+    const useRow = has('S') ? ppRow(p.nps) : pick ? [pick.nps, pick.dn, pick.d] : null;
+    const dUse = useRow ? useRow[2] : r.d, fu = Pipe.flow(r.Q, dUse, eps, w);
+    $('pp-fit-size').textContent = useRow ? `at ${ppLabel(useRow)} ${has('S') ? '(selected)' : '(recommended)'}` : `at the calculated ID`;
+    p.fittings.forEach((f, i) => { const el = document.querySelector(`[data-le="${i}"]`); if (el) el.textContent = `${show('len', Pipe.equivLength([{ k: f.k, n: 1 }], dUse), 1)} ${U('len')}`; });
+    const Le = Pipe.equivLength(p.fittings, dUse), L = num(p.len) >= 0 ? p.len : 0, other = num(p.other) >= 0 ? p.other : 0;
+    const hf = fu.fr * (L + Le) / 100, head = hf + other;
+    $('pp-total').innerHTML = row('Straight pipe', val('len', L)) + row('Fittings, equivalent length', val('len', Le)) + row('Total equivalent length', val('len', L + Le)) +
+      row('Friction rate at this size', val('pf', fu.fr)) + row('Pipe friction head', val('hd', hf)) + (other ? row('Other losses', val('hd', other)) : '') +
+      row('<strong>Total head</strong>', `<strong>${show('hd', head)}</strong><small>${U('hd')}</small> · ${show('psi', head * w.rho / 144)}<small>${U('psi')}</small>`);
+    ppDraw(w, eps, lim, { Q: r.Q, d: dUse, fr: fu.fr });
+  }
+
+  function ppDraw(w, eps, lim, pt) {
+    const svg = $('pp-chart'), W0 = 880, H0 = 520, m = { l: 64, r: 18, t: 14, b: 46 };
+    const pw = W0 - m.l - m.r, ph = H0 - m.t - m.b, fr0 = 0.1, fr1 = 20, q0 = 1, q1 = 20000;
+    const lx = Math.log10, X = f => m.l + (lx(f) - lx(fr0)) / (lx(fr1) - lx(fr0)) * pw, Y = q => m.t + ph - (lx(q) - lx(q0)) / (lx(q1) - lx(q0)) * ph;
+    const tickVals = (lo, hi) => { const r = []; for (let e = Math.floor(lx(lo)) - 1; e <= Math.ceil(lx(hi)) + 1; e++) for (const k of [1, 2, 5]) r.push(k * 10 ** e); return r; };
+    let s = `<defs><clipPath id="pp-clip"><rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+    const C = 'clip-path="url(#pp-clip)"';
+    // Carrier's shaded zones: friction above 10 ft/100 ft, velocity above 15 fps
+    s += `<rect x="${X(10)}" y="${m.t}" width="${m.l + pw - X(10)}" height="${ph}" fill="var(--warn)" opacity=".07"/>`;
+    const vPts = V => { const pts = []; for (let i = 0; i <= 80; i++) { const d = 10 ** (lx(0.2) + (lx(40) - lx(0.2)) * (80 - i) / 80), Q = V * Math.PI * d * d / 4 / 144 * 60 / 0.13368055; pts.push([X(Pipe.flow(Q, d, eps, w).fr), Y(Q)]); } return pts; };
+    const v15 = vPts(15);
+    s += `<path d="M${v15.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('L')}L${m.l + pw},${m.t - 400}L${m.l - 400},${m.t - 400}Z" fill="var(--warn)" opacity=".07" ${C}/>`;
+    for (const t of tickVals(out('pf', fr0), out('pf', fr1))) {
+      const ip = inn('pf', t); if (ip < fr0 * 0.999 || ip > fr1 * 1.001) continue;
+      const major = Math.abs(lx(t) - Math.round(lx(t))) < 1e-9;
+      s += `<line x1="${X(ip)}" x2="${X(ip)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--grid)" stroke-width="${major ? 1.4 : 1}"/><text x="${X(ip)}" y="${m.t + ph + 16}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${+t.toPrecision(3)}</text>`;
+    }
+    for (const t of tickVals(out('wq', q0), out('wq', q1))) {
+      const ip = inn('wq', t); if (ip < q0 * 0.999 || ip > q1 * 1.001) continue;
+      const major = Math.abs(lx(t) - Math.round(lx(t))) < 1e-9;
+      s += `<line x1="${m.l}" x2="${m.l + pw}" y1="${Y(ip)}" y2="${Y(ip)}" stroke="var(--grid)" stroke-width="${major ? 1.4 : 1}"/><text x="${m.l - 6}" y="${Y(ip) + 3.5}" text-anchor="end" font-size="10.5" fill="var(--muted)">${t >= 1000 ? (t / 1000) + 'k' : +t.toPrecision(3)}</text>`;
+    }
+    s += `<text x="${m.l + pw / 2}" y="${H0 - 8}" text-anchor="middle" font-size="12" fill="var(--muted)">Friction rate, ${U('pf')}</text>`;
+    s += `<text transform="translate(14,${m.t + ph / 2}) rotate(-90)" text-anchor="middle" font-size="12" fill="var(--muted)">Flow, ${U('wq')}</text>`;
+    let labels = '';
+    for (const r of ppMat().sizes) {
+      let d = '';
+      for (let i = 0; i <= 60; i++) { const Q = 10 ** (lx(q0) + (lx(q1) - lx(q0)) * i / 60); d += (i ? 'L' : 'M') + X(Pipe.flow(Q, r[2], eps, w).fr).toFixed(1) + ',' + Y(Q).toFixed(1); }
+      s += `<path d="${d}" fill="none" stroke="var(--sheet)" stroke-width="1" ${C}/>`;
+      const Ql = Math.min(q1 * 0.8, Pipe.qForFr(r[2], fr1 * 0.7, eps, w)), fl = Pipe.flow(Ql, r[2], eps, w).fr;
+      if (fl >= fr0 && Ql > q0 * 1.5) labels += `<text x="${X(fl) + 3}" y="${Y(Ql) - 3}" font-size="10" fill="var(--sheet)">${SI() && r[1] ? r[1] : r[0]}</text>`;
+    }
+    const vset = SI() ? [0.5, 1, 1.5, 2, 3, 4.5].map(v => v / 0.3048) : [1, 2, 4, 6, 8, 10, 15];
+    for (const V of vset) {
+      const pts = vPts(V);
+      s += `<path d="M${pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('L')}" fill="none" stroke="var(--vel)" stroke-width="1" stroke-dasharray="4 3" opacity=".75" ${C}/>`;
+      const lab = pts.find(q => q[1] > m.t + 14 && q[0] < m.l + pw - 30 && q[0] > m.l + 8 && q[1] < m.t + ph - 6);
+      if (lab) labels += `<text x="${lab[0] + 4}" y="${lab[1] + 11}" font-size="10" fill="var(--vel)">${SI() ? +out('fps', V).toFixed(1) : V} ${U('fps')}</text>`;
+    }
+    if (lim && lim.fr > 0 && lim.fr >= fr0 && lim.fr <= fr1) s += `<line x1="${X(lim.fr)}" x2="${X(lim.fr)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="2 3"/>`;
+    if (lim && lim.V > 0) { const pts = vPts(lim.V); s += `<path d="M${pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('L')}" fill="none" stroke="var(--vel)" stroke-width="2" ${C}/>`; }
+    s += labels;
+    if (pt && pt.Q >= q0 && pt.Q <= q1 && pt.fr >= fr0 && pt.fr <= fr1) {
+      const px = X(pt.fr), py = Y(pt.Q);
+      s += `<line x1="${m.l}" x2="${px}" y1="${py}" y2="${py}" stroke="var(--accent)" stroke-width="1" opacity=".5"/><line x1="${px}" x2="${px}" y1="${py}" y2="${m.t + ph}" stroke="var(--accent)" stroke-width="1" opacity=".5"/>`;
+      s += `<circle cx="${px}" cy="${py}" r="6.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;
+    }
+    s += `<rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="none" stroke="var(--line)"/>`;
+    svg.innerHTML = s;
+  }
+
   // ======================= boot =======================
-  const render = { psych: renderPsy, mix: renderMix, duct: renderDuct, calcs: renderHC };
-  fillGlobal(); psyFill(true); mixFill(); ductFill(true); hcBuildAll();
+  const render = { psych: renderPsy, mix: renderMix, duct: renderDuct, pipe: renderPipe, calcs: renderHC };
+  fillGlobal(); psyFill(true); mixFill(); ductFill(true); hcBuildAll(); ppFill(true); ppFits();
   const h = location.hash.slice(1);
   setTab(tabs.includes(h) ? h : S.tab);
 })();

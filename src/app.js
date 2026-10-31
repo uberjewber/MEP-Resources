@@ -11,6 +11,8 @@
       water: { calc: 'Q', order: ['Q', 'gpm', 'dT'], k: 500, vals: { Q: 120000, gpm: 24, dT: 10 } },
       ach: { calc: 'ACH', order: ['ACH', 'V', 'cfm', 'L', 'W', 'H'], mode: 'dims', vals: { ACH: 6, V: 4000, cfm: 400, L: 20, W: 20, H: 10 } },
     },
+    pipe: { mat: 's40c', tF: 60, eps: null, pins: ['Q', 'fr'], Q: 150, nps: '3', dCalc: NaN, V: 6, fr: 4, svc: 'general', hrs: 4000, len: 200, other: 0,
+      fittings: [{ k: 'ell90', n: 8 }, { k: 'teeRun', n: 2 }, { k: 'teeBr', n: 2 }, { k: 'bfly', n: 2 }, { k: 'check', n: 1 }] },
     duct: { shape: 'round', mat: '0.0003', eps: 0.0003, airMode: 'std', tF: 70, pins: ['Q', 'fr'], Q: 1000, D: 14, W: 20, H: 10, V: 900, fr: 0.08, len: 100 },
   };
   let S = clone(DEF);
@@ -25,6 +27,8 @@
     h.order = [...keys.filter(k => !ord.includes(k)), ...ord];
     S.hvac[n] = h;
   }
+  S.pipe = { ...clone(DEF.pipe), ...(S.pipe || {}) };
+  if (!Array.isArray(S.pipe.fittings)) S.pipe.fittings = clone(DEF.pipe.fittings);
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
   const num = x => (typeof x === 'number' && Number.isFinite(x)) ? x : NaN;
 
@@ -59,6 +63,12 @@
     mh:  { ipf: 60, sif: 0.45359237 * 60, ip: 'lb/h', si: 'kg/h', dip: 1, dsi: 1 },        // from lb/min
     gph: { ipf: 60 / 8.34, sif: 0.45359237 * 60, ip: 'gph', si: 'L/h', dip: 2, dsi: 1 },  // from lb/min of water
     gpm: { ipf: 1 / 8.34, sif: 0.45359237, ip: 'gpm', si: 'L/min', dip: 3, dsi: 2 },
+    fps:  { ipf: 1, sif: 0.3048, ip: 'fps', si: 'm/s', dip: 2, dsi: 2 },
+    pf:   { ipf: 1, sif: 9.79, ip: 'ft/100 ft', si: 'kPa/100 m', dip: 2, dsi: 2 },   // sif set from water density
+    hd:   { ipf: 1, sif: 0.3048, ip: 'ft', si: 'm', dip: 1, dsi: 2 },
+    psi:  { ipf: 1, sif: 6.894757, ip: 'psi', si: 'kPa', dip: 2, dsi: 1 },
+    pid:  { ipf: 1, sif: 25.4, ip: 'in', si: 'mm', dip: 3, dsi: 1 },
+    peps: { ipf: 1, sif: 304.8, ip: 'ft', si: 'mm', dip: 6, dsi: 4 },
     ld:  { ipf: 60, sif: 60 * 0.00029307107, ip: 'Btu/h', si: 'kW', dip: 0, dsi: 2 },     // from Btu/min
   };
   const out = (k, x) => k === 't' ? (SI() ? (x - 32) / 1.8 : x) : x * (SI() ? K[k].sif : K[k].ipf);
@@ -283,7 +293,7 @@
   }
 
   // ======================= global settings + tabs =======================
-  const tabs = ['psych', 'mix', 'duct', 'calcs'];
+  const tabs = ['psych', 'mix', 'duct', 'pipe', 'calcs'];
   function setTab(t) {
     if (!tabs.includes(t)) t = 'psych';
     S.tab = t; save();
@@ -316,7 +326,7 @@
     // enthalpy is stored in the display system: carry it across using the last solved state
     if (psyLast) S.psy.vals.h = b.dataset.v === 'SI' ? psyLast.hSI : psyLast.hIP;
     S.units = b.dataset.v; save(); fillGlobal();
-    psyFill(true); mixFill(); ductFill(true); hcBuildAll();
+    psyFill(true); mixFill(); ductFill(true); hcBuildAll(); ppFill(true); ppFits();
     render[S.tab]();
   });
   $('g-elev').addEventListener('input', e => { const x = parseFloat(e.target.value); S.elev = Number.isFinite(x) ? inn('z', x) : NaN; save(); render[S.tab](); });
@@ -968,9 +978,229 @@
     const n = b.dataset.reset; S.hvac[n] = clone(DEF.hvac[n]); save(); hcBuildAll(); renderHC();
   });
 
+  // ======================= PIPE SIZER =======================
+  const ppMat = () => Pipe.MATERIALS[S.pipe.mat] || Pipe.MATERIALS.s40c;
+  const ppEps = () => Number.isFinite(num(S.pipe.eps)) ? S.pipe.eps : ppMat().eps;
+  const ppTempOk = () => S.pipe.tF >= 33 && S.pipe.tF <= 210;
+  const ppWater = () => Pipe.water(ppTempOk() ? S.pipe.tF : 60);
+  const ppRow = nps => ppMat().sizes.find(r => r[0] === nps);
+  const ppLabel = r => SI() && r[1] ? `DN${r[1]}` : `${r[0]} in`;
+  const ppLabelFull = r => SI() && r[1] ? `DN${r[1]} (${r[0]} in)` : `${r[0]} in`;
+  const PPN = { Q: 'flow', S: 'pipe size', V: 'velocity', fr: 'friction rate' };
+  const ppSetPf = () => { K.pf.sif = ppWater().rho * 16.01846 * 9.80665 / 1000; };   // m/100 m of head → kPa/100 m
+  $('pp-mat').innerHTML = Object.entries(Pipe.MATERIALS).map(([k, m]) => `<option value="${k}">${m.name}${m.chart ? ' · ' + m.chart : ''}</option>`).join('');
+  $('pp-svc').innerHTML = `<option value="">Not limiting</option>` + Pipe.SERVICES.map(s => `<option value="${s.k}">${s.name}</option>`).join('');
+  function ppPromote(v) { const p = S.pipe; p.pins = p.pins.filter(k => k !== v); p.pins.push(v); while (p.pins.length > 2) p.pins.shift(); }
+  function ppLimits() {
+    const p = S.pipe, svc = Pipe.SERVICES.find(s => s.k === p.svc) || null, ero = Pipe.EROSION.find(e => e[0] === +p.hrs) || null;
+    // friction target and any entered velocity come from the calculator; service and erosion add velocity caps
+    const vIn = p.pins.includes('V') && p.V > 0 ? p.V : Infinity;
+    const cands = [['your velocity', vIn], ['service', svc ? svc.max : Infinity], ['erosion', ero ? ero[1] : Infinity]];
+    const g = cands.reduce((a, c) => (c[1] < a[1] ? c : a));
+    return { fr: p.pins.includes('fr') && p.fr > 0 ? p.fr : 0, V: Number.isFinite(g[1]) ? g[1] : 0, Vmin: svc ? svc.min : 0, svc, ero,
+      gov: Number.isFinite(g[1]) ? g[0] : null };
+  }
+  function ppFill(force) {
+    const p = S.pipe; ppSetPf();
+    $('pp-mat').value = p.mat; $('pp-svc').value = p.svc || '';
+    $('pp-hrs').innerHTML = `<option value="">Not limiting</option>` + Pipe.EROSION.map(([h, v]) => `<option value="${h}">${h.toLocaleString('en-US')} h (${show('fps', v, SI() ? 1 : 0)} ${U('fps')})</option>`).join('');
+    $('pp-hrs').value = p.hrs ? String(p.hrs) : '';
+    if (force) {
+      $('pp-t').value = inVal('t', num(p.tF)); $('pp-eps').value = inVal('peps', ppEps());
+      $('pp-len').value = inVal('len', num(p.len)); $('pp-other').value = inVal('hd', num(p.other));
+    }
+    $('pp-eps-reset').hidden = !Number.isFinite(num(p.eps));
+    for (const [k, id, kind] of [['Q', 'pp-Q', 'wq'], ['V', 'pp-V', 'fps'], ['fr', 'pp-fr', 'pf']]) {
+      const pinned = p.pins.includes(k);
+      if (!pinned || force) $(id).value = inVal(kind, num(p[k]));
+      $(id).classList.toggle('calcd', !pinned);
+    }
+    const sPinned = p.pins.includes('S');
+    $('pp-S').innerHTML = (sPinned ? '' : `<option value="">${Number.isFinite(num(p.dCalc)) ? `ID ${show('pid', p.dCalc)} ${U('pid')}` : '—'}</option>`) +
+      ppMat().sizes.map(r => `<option value="${r[0]}">${ppLabelFull(r)}</option>`).join('');
+    $('pp-S').value = sPinned ? p.nps : '';
+    $('pp-S').classList.toggle('calcd', !sPinned);
+    document.querySelectorAll('#tab-pipe [data-u]').forEach(el => el.textContent = U(el.dataset.u));
+  }
+  for (const [k, id, kind] of [['Q', 'pp-Q', 'wq'], ['V', 'pp-V', 'fps'], ['fr', 'pp-fr', 'pf']]) $(id).addEventListener('input', e => {
+    const x = parseFloat(e.target.value); S.pipe[k] = Number.isFinite(x) ? inn(kind, x) : NaN; ppPromote(k); save(); renderPipe();
+  });
+  $('pp-S').addEventListener('change', e => { if (!e.target.value) return; S.pipe.nps = e.target.value; ppPromote('S'); save(); ppFill(false); renderPipe(); });
+  $('tab-pipe').querySelectorAll('.calc .pin').forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.var, p = S.pipe;
+    if (p.pins.includes(v)) p.pins = p.pins.filter(k => k !== v); else ppPromote(v);
+    save(); ppFill(false); renderPipe();
+  }));
+  $('pp-mat').addEventListener('change', e => {
+    const p = S.pipe, oldD = (ppRow(p.nps) || [0, 0, num(p.dCalc)])[2];
+    p.mat = e.target.value; p.eps = null;
+    if (!ppRow(p.nps)) { const rows = ppMat().sizes; p.nps = rows.reduce((a, r) => Math.abs(r[2] - oldD) < Math.abs(a[2] - oldD) ? r : a, rows[0])[0]; }
+    save(); ppFill(true); renderPipe();
+  });
+  const ppNum = (id, key, kind) => $(id).addEventListener('input', e => { const x = parseFloat(e.target.value); S.pipe[key] = Number.isFinite(x) ? inn(kind, x) : NaN; save(); if (key === 'tF') ppFill(false); renderPipe(); });
+  ppNum('pp-t', 'tF', 't'); ppNum('pp-eps', 'eps', 'peps'); ppNum('pp-len', 'len', 'len'); ppNum('pp-other', 'other', 'hd');
+  $('pp-eps-reset').addEventListener('click', () => { S.pipe.eps = null; save(); ppFill(true); renderPipe(); });
+  $('pp-svc').addEventListener('change', e => { S.pipe.svc = e.target.value; save(); renderPipe(); });
+  $('pp-hrs').addEventListener('change', e => { S.pipe.hrs = e.target.value ? +e.target.value : 0; save(); renderPipe(); });
+  $('pp-reset').addEventListener('click', () => { S.pipe = clone(DEF.pipe); save(); ppFill(true); ppFits(); renderPipe(); });
+  const ppUse = nps => { S.pipe.nps = nps; S.pipe.pins = ['Q', 'S']; save(); ppFill(false); renderPipe(); };
+
+  // fittings list
+  function ppFits() {
+    const p = S.pipe;
+    $('pp-fits').innerHTML = (p.fittings.length ? `<div class="pp-fit pp-fit-head"><span>Fitting</span><span>Qty</span><span style="text-align:right">Equiv. each</span><span></span></div>` : '') +
+      p.fittings.map((f, i) => `<div class="pp-fit" data-i="${i}">
+        <select aria-label="Fitting type">${Pipe.FITTINGS.map(F => `<option value="${F.k}"${F.k === f.k ? ' selected' : ''}>${F.name}</option>`).join('')}</select>
+        <input type="number" min="0" step="1" inputmode="numeric" value="${num(f.n) >= 0 ? f.n : ''}" aria-label="Quantity">
+        <span class="le" data-le="${i}"></span>
+        <button type="button" class="x" aria-label="Remove fitting">×</button></div>`).join('');
+  }
+  $('pp-fits').addEventListener('input', e => {
+    const row = e.target.closest('.pp-fit'); if (!row) return; const i = +row.dataset.i, f = S.pipe.fittings[i];
+    if (e.target.tagName === 'SELECT') f.k = e.target.value; else { const x = parseFloat(e.target.value); f.n = Number.isFinite(x) ? x : 0; }
+    save(); renderPipe();
+  });
+  $('pp-fits').addEventListener('click', e => {
+    const b = e.target.closest('.x'); if (!b) return; S.pipe.fittings.splice(+b.closest('.pp-fit').dataset.i, 1); save(); ppFits(); renderPipe();
+  });
+  $('pp-addfit').addEventListener('click', () => { S.pipe.fittings.push({ k: 'ell90', n: 1 }); save(); ppFits(); renderPipe(); });
+
+  function renderPipe() {
+    showPressure();
+    const p = S.pipe, errs = [];
+    ['pp-Q', 'pp-V', 'pp-fr', 'pp-t', 'pp-eps', 'pp-len', 'pp-other', 'pp-S'].forEach(id => $(id).classList.remove('bad'));
+    const bad = (id, msg) => { $(id).classList.add('bad'); errs.push(msg); };
+    if (!ppTempOk()) bad('pp-t', `Enter a water temperature between ${show('t', 33, 0)} and ${show('t', 210, 0)} ${U('t')}.`);
+    const eps = ppEps(); if (!(eps >= 0 && eps < 0.05)) bad('pp-eps', 'Enter a roughness of zero or more.');
+    const w = ppWater(); ppSetPf();
+    $('pp-props').textContent = `ρ ${show('rho', w.rho)} ${U('rho')} · μ ${fx(w.mu * 1488.164, 3)} cP`;
+    const has = k => p.pins.includes(k);
+    if (has('Q') && !(p.Q > 0)) bad('pp-Q', 'Enter a flow greater than zero.');
+    if (has('V') && !(p.V > 0)) bad('pp-V', 'Enter a velocity greater than zero.');
+    if (has('fr') && !(p.fr > 0)) bad('pp-fr', 'Enter a friction rate greater than zero.');
+    if (has('S') && !ppRow(p.nps)) bad('pp-S', 'Select a pipe size.');
+    if (p.pins.length < 2) errs.push(`Enter one more value.${p.pins.length ? ' Currently using ' + PPN[p.pins[0]] + ' only.' : ''}`);
+    for (const v of ['Q', 'S', 'V', 'fr']) {
+      const box = $('pp-v-' + v), pinned = has(v); box.classList.toggle('pinned', pinned);
+      const b = box.querySelector('.pin'); b.textContent = pinned ? 'Input' : 'Calculated';
+      b.title = pinned ? 'Click to release this value' : 'Click to keep this value as an input';
+    }
+    const lim = ppLimits();
+    $('pp-limtxt').innerHTML =
+      row('Friction target', lim.fr > 0 ? `${show('pf', lim.fr)}<small>${U('pf')} (calculator)</small>` : '<small>none, friction is being calculated</small>') +
+      row('Service velocity range', lim.svc ? `${show('fps', lim.svc.min, SI() ? 1 : 0)}–${show('fps', lim.svc.max, SI() ? 1 : 0)}<small>${U('fps')}</small>` : 'none') +
+      row('Erosion limit', lim.ero ? `${show('fps', lim.ero[1], SI() ? 1 : 0)}<small>${U('fps')} at ${lim.ero[0].toLocaleString('en-US')} h/yr</small>` : 'none') +
+      row('Governing max velocity', lim.V > 0 ? `${show('fps', lim.V, SI() ? 1 : 0)}<small>${U('fps')} (${lim.gov})</small>` : 'none');
+    $('pp-chartsub').textContent = `${ppMat().name}, ε = ${show('peps', eps)} ${U('peps')}, ${show('t', p.tF, 0)} ${U('t')}`;
+    $('pp-err').hidden = !errs.length; $('pp-err').textContent = errs.join(' ');
+    if (errs.length) {
+      ['Q', 'S', 'V', 'fr'].forEach(v => $('pp-sub-' + v).textContent = ''); $('pp-mode').textContent = '';
+      $('pp-rec').innerHTML = '<p class="note">Results appear once two valid values are entered.</p>';
+      $('pp-table').innerHTML = ''; $('pp-total').innerHTML = ''; $('pp-fit-size').textContent = '';
+      ppDraw(w, eps, lim, null); return;
+    }
+    const r = Pipe.solve({ pins: p.pins, Q: p.Q, d: has('S') ? ppRow(p.nps)[2] : NaN, V: p.V, fr: p.fr, eps, w });
+    if (!has('Q')) p.Q = r.Q; if (!has('V')) p.V = r.V; if (!has('fr')) p.fr = r.fr; if (!has('S')) p.dCalc = r.d;
+    save(); ppFill(false);
+    $('pp-sub-Q').textContent = SI() ? `${fx(r.Q * 0.2271247, 2)} m³/h` : `${fx(r.Q * 500 * 10 / 12000, 1)} tons at 10 °F ΔT`;
+    $('pp-sub-S').textContent = has('S') ? `ID ${show('pid', r.d)} ${U('pid')}` : `required ID ${show('pid', r.d)} ${U('pid')}`;
+    $('pp-sub-V').textContent = `velocity head ${fx(out('hd', r.hv), 3)} ${U('hd')}`;
+    $('pp-sub-fr').textContent = `Re ${fx(r.Re, 0)}${r.Re < 2300 ? ' (laminar)' : ''} · f ${fx(r.f, 4)}`;
+    const solved = ['Q', 'S', 'V', 'fr'].filter(k => !has(k)).map(k => PPN[k]);
+    $('pp-mode').textContent = `Calculating ${solved.join(' and ')} from ${PPN[p.pins[0]]} and ${PPN[p.pins[1]]}.`;
+
+    // recommendation and size table at this flow
+    const T = Pipe.table(ppMat().sizes, r.Q, lim, eps, w), pick = T.pick;
+    const status = x => x.fr > lim.fr && lim.fr > 0 ? '<span class="chip over">Friction</span>' : x.V > lim.V && lim.V > 0 ? '<span class="chip over">Velocity</span>' : x.V < lim.Vmin ? '<span class="chip low">Low velocity</span>' : '<span class="chip ok">OK</span>';
+    const qTxt = `${show('wq', r.Q, SI() ? 2 : 1)} ${U('wq')}`;
+    const limTxt = [lim.fr > 0 ? `friction ≤ ${show('pf', lim.fr)} ${U('pf')}` : '', lim.V > 0 ? `velocity ≤ ${show('fps', lim.V, SI() ? 2 : 1)} ${U('fps')} (${lim.gov})` : ''].filter(Boolean).join(', ');
+    let rec = `<div class="eyebrow">Smallest standard size for ${qTxt}</div><p class="note" style="margin-top:-8px">${limTxt ? 'Meeting ' + limTxt + '.' : 'No limits set: enter a friction rate or velocity, or pick a service or operating hours.'}</p>`;
+    if (pick) {
+      const i = T.rows.indexOf(pick), dn = T.rows[i - 1];
+      const using = has('S') && p.nps === pick.nps;
+      rec += `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap">
+        <div class="stdbig">${ppLabelFull([pick.nps, pick.dn])}</div>${using ? '<span class="chip ok">In use</span>' : '<button type="button" class="btn" id="pp-use">Use this size</button>'}</div>
+        <dl class="props">${row('Velocity', val('fps', pick.V))}${row('Friction rate', val('pf', pick.fr))}${row('Inside diameter', val('pid', pick.d))}</dl>`;
+      if (dn) rec += `<p class="note">Next size down, ${ppLabel([dn.nps, dn.dn])}, runs ${show('pf', dn.fr)} ${U('pf')} at ${show('fps', dn.V)} ${U('fps')}${dn.fr > lim.fr && lim.fr > 0 ? ', over the friction target' : ''}${dn.V > lim.V && lim.V > 0 ? (dn.fr > lim.fr && lim.fr > 0 ? ' and' : ',') + ' over the velocity limit' : ''}.</p>`;
+      if (pick.V < lim.Vmin) rec += `<p class="note">Velocity is below the ${lim.svc.name.toLowerCase()} range of ${show('fps', lim.svc.min, SI() ? 1 : 0)}–${show('fps', lim.svc.max, SI() ? 1 : 0)} ${U('fps')}; the limits are met, but the pipe may be oversized for this service.</p>`;
+    } else rec += `<p class="warnbox">No ${ppMat().name.toLowerCase()} size up to ${ppLabel(T.rows[T.rows.length - 1])} meets the limits at this flow.</p>`;
+    $('pp-rec').innerHTML = rec;
+    if ($('pp-use')) $('pp-use').onclick = () => ppUse(pick.nps);
+    $('pp-table').innerHTML = `<thead><tr><th>Size</th><th>ID</th><th>Velocity</th><th>Friction</th><th>Status</th></tr></thead><tbody>` +
+      (p.allSizes ? T.rows : T.rows.slice(Math.max(0, (pick ? T.rows.indexOf(pick) : T.rows.length - 1) - 3), (pick ? T.rows.indexOf(pick) : T.rows.length - 1) + 4)).map(x => `<tr class="click${(has('S') ? p.nps === x.nps : pick && pick.nps === x.nps) ? ' hi' : ''}${x.V < 0.5 || x.fr > 40 ? ' dim' : ''}" data-nps="${x.nps}" tabindex="0">
+        <td class="sz">${ppLabel([x.nps, x.dn])}</td><td>${show('pid', x.d)}</td><td>${show('fps', x.V)}</td><td>${show('pf', x.fr)}</td><td>${status(x)}</td></tr>`).join('') +
+      `</tbody>`;
+    $('pp-table').insertAdjacentHTML('beforeend', `<caption style="caption-side:bottom;text-align:left;padding-top:6px" class="note">${U('pid')} · ${U('fps')} · ${U('pf')}. ${p.allSizes ? 'All sizes.' : 'Three sizes either side of the recommendation.'} <button type="button" class="btn sm" id="pp-all">${p.allSizes ? 'Show fewer' : 'Show all sizes'}</button></caption>`);
+    $('pp-all').onclick = e => { e.stopPropagation(); S.pipe.allSizes = !S.pipe.allSizes; save(); renderPipe(); };
+    $('pp-table').querySelectorAll('tr.click').forEach(tr => { const go = () => ppUse(tr.dataset.nps); tr.addEventListener('click', go); tr.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
+
+    // fittings and total head, at the size in use (or the recommended size)
+    const useRow = has('S') ? ppRow(p.nps) : pick ? [pick.nps, pick.dn, pick.d] : null;
+    const dUse = useRow ? useRow[2] : r.d, fu = Pipe.flow(r.Q, dUse, eps, w);
+    $('pp-fit-size').textContent = useRow ? `at ${ppLabel(useRow)} ${has('S') ? '(selected)' : '(recommended)'}` : `at the calculated ID`;
+    p.fittings.forEach((f, i) => { const el = document.querySelector(`[data-le="${i}"]`); if (el) el.textContent = `${show('len', Pipe.equivLength([{ k: f.k, n: 1 }], dUse), 1)} ${U('len')}`; });
+    const Le = Pipe.equivLength(p.fittings, dUse), L = num(p.len) >= 0 ? p.len : 0, other = num(p.other) >= 0 ? p.other : 0;
+    const hf = fu.fr * (L + Le) / 100, head = hf + other;
+    $('pp-total').innerHTML = row('Straight pipe', val('len', L)) + row('Fittings, equivalent length', val('len', Le)) + row('Total equivalent length', val('len', L + Le)) +
+      row('Friction rate at this size', val('pf', fu.fr)) + row('Pipe friction head', val('hd', hf)) + (other ? row('Other losses', val('hd', other)) : '') +
+      row('<strong>Total head</strong>', `<strong>${show('hd', head)}</strong><small>${U('hd')}</small> · ${show('psi', head * w.rho / 144)}<small>${U('psi')}</small>`);
+    ppDraw(w, eps, lim, { Q: r.Q, d: dUse, fr: fu.fr });
+  }
+
+  function ppDraw(w, eps, lim, pt) {
+    const svg = $('pp-chart'), W0 = 880, H0 = 520, m = { l: 64, r: 18, t: 14, b: 46 };
+    const pw = W0 - m.l - m.r, ph = H0 - m.t - m.b, fr0 = 0.1, fr1 = 20, q0 = 1, q1 = 20000;
+    const lx = Math.log10, X = f => m.l + (lx(f) - lx(fr0)) / (lx(fr1) - lx(fr0)) * pw, Y = q => m.t + ph - (lx(q) - lx(q0)) / (lx(q1) - lx(q0)) * ph;
+    const tickVals = (lo, hi) => { const r = []; for (let e = Math.floor(lx(lo)) - 1; e <= Math.ceil(lx(hi)) + 1; e++) for (const k of [1, 2, 5]) r.push(k * 10 ** e); return r; };
+    let s = `<defs><clipPath id="pp-clip"><rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+    const C = 'clip-path="url(#pp-clip)"';
+    // Carrier's shaded zones: friction above 10 ft/100 ft, velocity above 15 fps
+    s += `<rect x="${X(10)}" y="${m.t}" width="${m.l + pw - X(10)}" height="${ph}" fill="var(--warn)" opacity=".07"/>`;
+    const vPts = V => { const pts = []; for (let i = 0; i <= 80; i++) { const d = 10 ** (lx(0.2) + (lx(40) - lx(0.2)) * (80 - i) / 80), Q = V * Math.PI * d * d / 4 / 144 * 60 / 0.13368055; pts.push([X(Pipe.flow(Q, d, eps, w).fr), Y(Q)]); } return pts; };
+    const v15 = vPts(15);
+    s += `<path d="M${v15.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('L')}L${m.l + pw},${m.t - 400}L${m.l - 400},${m.t - 400}Z" fill="var(--warn)" opacity=".07" ${C}/>`;
+    for (const t of tickVals(out('pf', fr0), out('pf', fr1))) {
+      const ip = inn('pf', t); if (ip < fr0 * 0.999 || ip > fr1 * 1.001) continue;
+      const major = Math.abs(lx(t) - Math.round(lx(t))) < 1e-9;
+      s += `<line x1="${X(ip)}" x2="${X(ip)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--grid)" stroke-width="${major ? 1.4 : 1}"/><text x="${X(ip)}" y="${m.t + ph + 16}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${+t.toPrecision(3)}</text>`;
+    }
+    for (const t of tickVals(out('wq', q0), out('wq', q1))) {
+      const ip = inn('wq', t); if (ip < q0 * 0.999 || ip > q1 * 1.001) continue;
+      const major = Math.abs(lx(t) - Math.round(lx(t))) < 1e-9;
+      s += `<line x1="${m.l}" x2="${m.l + pw}" y1="${Y(ip)}" y2="${Y(ip)}" stroke="var(--grid)" stroke-width="${major ? 1.4 : 1}"/><text x="${m.l - 6}" y="${Y(ip) + 3.5}" text-anchor="end" font-size="10.5" fill="var(--muted)">${t >= 1000 ? (t / 1000) + 'k' : +t.toPrecision(3)}</text>`;
+    }
+    s += `<text x="${m.l + pw / 2}" y="${H0 - 8}" text-anchor="middle" font-size="12" fill="var(--muted)">Friction rate, ${U('pf')}</text>`;
+    s += `<text transform="translate(14,${m.t + ph / 2}) rotate(-90)" text-anchor="middle" font-size="12" fill="var(--muted)">Flow, ${U('wq')}</text>`;
+    let labels = '';
+    for (const r of ppMat().sizes) {
+      let d = '';
+      for (let i = 0; i <= 60; i++) { const Q = 10 ** (lx(q0) + (lx(q1) - lx(q0)) * i / 60); d += (i ? 'L' : 'M') + X(Pipe.flow(Q, r[2], eps, w).fr).toFixed(1) + ',' + Y(Q).toFixed(1); }
+      s += `<path d="${d}" fill="none" stroke="var(--sheet)" stroke-width="1" ${C}/>`;
+      const Ql = Math.min(q1 * 0.8, Pipe.qForFr(r[2], fr1 * 0.7, eps, w)), fl = Pipe.flow(Ql, r[2], eps, w).fr;
+      if (fl >= fr0 && Ql > q0 * 1.5) labels += `<text x="${X(fl) + 3}" y="${Y(Ql) - 3}" font-size="10" fill="var(--sheet)">${SI() && r[1] ? r[1] : r[0]}</text>`;
+    }
+    const vset = SI() ? [0.5, 1, 1.5, 2, 3, 4.5].map(v => v / 0.3048) : [1, 2, 4, 6, 8, 10, 15];
+    for (const V of vset) {
+      const pts = vPts(V);
+      s += `<path d="M${pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('L')}" fill="none" stroke="var(--vel)" stroke-width="1" stroke-dasharray="4 3" opacity=".75" ${C}/>`;
+      const lab = pts.find(q => q[1] > m.t + 14 && q[0] < m.l + pw - 30 && q[0] > m.l + 8 && q[1] < m.t + ph - 6);
+      if (lab) labels += `<text x="${lab[0] + 4}" y="${lab[1] + 11}" font-size="10" fill="var(--vel)">${SI() ? +out('fps', V).toFixed(1) : V} ${U('fps')}</text>`;
+    }
+    if (lim && lim.fr > 0 && lim.fr >= fr0 && lim.fr <= fr1) s += `<line x1="${X(lim.fr)}" x2="${X(lim.fr)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="2 3"/>`;
+    if (lim && lim.V > 0) { const pts = vPts(lim.V); s += `<path d="M${pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('L')}" fill="none" stroke="var(--vel)" stroke-width="2" ${C}/>`; }
+    s += labels;
+    if (pt && pt.Q >= q0 && pt.Q <= q1 && pt.fr >= fr0 && pt.fr <= fr1) {
+      const px = X(pt.fr), py = Y(pt.Q);
+      s += `<line x1="${m.l}" x2="${px}" y1="${py}" y2="${py}" stroke="var(--accent)" stroke-width="1" opacity=".5"/><line x1="${px}" x2="${px}" y1="${py}" y2="${m.t + ph}" stroke="var(--accent)" stroke-width="1" opacity=".5"/>`;
+      s += `<circle cx="${px}" cy="${py}" r="6.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;
+    }
+    s += `<rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="none" stroke="var(--line)"/>`;
+    svg.innerHTML = s;
+  }
+
   // ======================= boot =======================
-  const render = { psych: renderPsy, mix: renderMix, duct: renderDuct, calcs: renderHC };
-  fillGlobal(); psyFill(true); mixFill(); ductFill(true); hcBuildAll();
+  const render = { psych: renderPsy, mix: renderMix, duct: renderDuct, pipe: renderPipe, calcs: renderHC };
+  fillGlobal(); psyFill(true); mixFill(); ductFill(true); hcBuildAll(); ppFill(true); ppFits();
   const h = location.hash.slice(1);
   setTab(tabs.includes(h) ? h : S.tab);
 })();

@@ -25,6 +25,7 @@ shell = (SRC / "shell.html").read_text()
 page = (shell
         .replace("/*PSY*/", strip_export((SRC / "psychro.js").read_text()))
         .replace("/*DUCT*/", strip_export((SRC / "duct.js").read_text()))
+        .replace("/*PIPE*/", strip_export((SRC / "pipe.js").read_text()))
         .replace("/*APP*/", (SRC / "app.js").read_text()))
 release = page.replace("/*UPDATED*/", stamp)
 

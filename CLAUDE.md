@@ -6,11 +6,13 @@ to `main` here once Ari approves it; the push redeploys the site.
 
 ## Layout
 - `index.html` — the built, self-contained page that Pages serves. Generated; don't hand-edit.
-- `src/shell.html` — markup and CSS for all tabs, with `/*PSY*/`, `/*DUCT*/`, `/*APP*/` placeholders.
+- `src/shell.html` — markup and CSS for all tabs, with `/*PSY*/`, `/*DUCT*/`, `/*PIPE*/`, `/*APP*/` placeholders.
 - `src/psychro.js` — psychrometric engine (ASHRAE Fundamentals Ch. 1, IP units internally): saturation
   pressure, any-two-property solver, two-stream mixing with fogging, cooling coil (condensate, loads, ADP, BF).
 - `src/duct.js` — duct friction engine (Darcy–Weisbach + Colebrook, Huebscher equivalent diameter) and the
   any-two duct solver.
+- `src/pipe.js` — water pipe engine (Carrier Part 3 method: Darcy–Weisbach + Colebrook, Sch 40/80 steel closed/open,
+  copper K/L/M, PVC/CPVC; IAPWS water properties; Table 13/14 velocity limits; Crane L/D fittings) and solver.
 - `src/app.js` — UI, unit conversion (state is always stored in IP), charts, tab routing, browser storage.
 - `tools/build.py` — assembles `index.html` from `src/`.
 - `tools/check.py` — headless Chromium smoke test of every tab at desktop and phone width.
