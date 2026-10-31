@@ -1,6 +1,6 @@
 # MEP Resources
 
-This repo is the home of the **Airside Toolkit**, published with GitHub Pages from `main` / root at
+This repo is the home of the **MEP Toolkit** (formerly the Airside Toolkit), published with GitHub Pages from `main` / root at
 https://uberjewber.github.io/mep-resources/ . Every change to the toolkit gets committed and pushed
 to `main` here once Ari approves it; the push redeploys the site.
 
@@ -20,9 +20,9 @@ to `main` here once Ari approves it; the push redeploys the site.
 ## Workflow
 Ari reviews every change before it goes live. Never push to `main` without his explicit go-ahead.
 1. Edit files in `src/`.
-2. `python3 tools/build.py --preview <scratch>/airside-preview.html`
+2. `python3 tools/build.py --preview <scratch>/mep-preview.html`
 3. `python3 tools/check.py <screenshot-dir>` and look at the screenshots for anything visual.
-4. Show Ari the mockup: publish the preview file to the "Airside Toolkit" artifact
+4. Show Ari the mockup: publish the preview file to the "MEP Toolkit" artifact
    (https://claude.ai/artifact/AiXqLSLQynGTn7nQVQC4kR) and summarize what changed.
    Commit locally if useful, but do not push.
 5. Only after Ari confirms: run `python3 tools/build.py` again right before committing (it stamps

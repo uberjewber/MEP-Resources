@@ -1,6 +1,6 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const KEY = 'airside-toolkit-v1';
+  const KEY = 'airside-toolkit-v1';   // original name kept so saved inputs survive the rename to MEP Toolkit
   const clone = o => JSON.parse(JSON.stringify(o));
   const DEF = {
     units: 'IP', elev: 0, tab: 'psych',

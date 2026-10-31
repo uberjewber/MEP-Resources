@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Psychrometrics, airstream mixing with a cooling coil, duct sizing and quick HVAC calculations.">
+<meta name="description" content="MEP Toolkit: psychrometrics, airstream mixing with a cooling coil, duct and pipe sizing, and quick HVAC calculations.">
 <style>:root{color-scheme:light}body{margin:0;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>Airside Toolkit</title>
+<title>MEP Toolkit</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -238,10 +238,10 @@ svg.fric { min-width: 560px; }
 <div class="wrap">
   <div class="topbar">
     <div>
-      <div class="updated" id="last-updated">Last updated Oct 31, 2026, 11:37 AM CT</div>
-      <div class="eyebrow">HVAC airside calculations · ASHRAE Fundamentals methods</div>
-      <h1>Airside Toolkit</h1>
-      <p>Psychrometric state points, airstream mixing and duct sizing in one place. Units and site elevation apply to every tool.</p>
+      <div class="updated" id="last-updated">Last updated Oct 31, 2026, 12:45 PM CT</div>
+      <div class="eyebrow">HVAC and piping calculations · ASHRAE and Carrier methods</div>
+      <h1>MEP Toolkit</h1>
+      <p>Psychrometrics, airstream mixing, duct and pipe sizing, and quick HVAC calculations in one place. Units and site elevation apply to every tool.</p>
     </div>
     <div class="global" aria-label="Shared settings">
       <div class="field"><span class="lbl">Units</span>
@@ -1082,7 +1082,7 @@ const Pipe = (() => {
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const KEY = 'airside-toolkit-v1';
+  const KEY = 'airside-toolkit-v1';   // original name kept so saved inputs survive the rename to MEP Toolkit
   const clone = o => JSON.parse(JSON.stringify(o));
   const DEF = {
     units: 'IP', elev: 0, tab: 'psych',
